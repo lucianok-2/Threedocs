@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -134,3 +135,18 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+=======
+# Node
+node_modules/
+.env
+firebase.json
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor configs
+.DS_Store
+.vscode/
+.idea/
+>>>>>>> 89ee6e5 (Programacion base de conexion firebase)

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- Mismo head que en el original -->
+    <style>
+        /* Estilos específicos del login */
+        .login-container {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
+        <!-- Contenido completo del login del original -->
+    </div>
+
+    <script>
+        // Script específico de login
+        document.getElementById('login-btn').addEventListener('click', function() {
+            // Validación y redirección a dashboard.html
+            window.location.href = 'dashboard.html';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+/* Estilos globales y comunes */
+.rut-input:invalid { border-color: #f56565; }
+.upload-area { border: 2px dashed #cbd5e0; }
+/* ... */
