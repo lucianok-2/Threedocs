@@ -4,17 +4,16 @@
     "express": "^5.1.0",
     "express-handlebars": "^8.0.2",
     "firebase-admin": "^13.3.0",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0"
   },
   "name": "threedocs",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js"
-
   },
   "keywords": [],
   "author": "",
