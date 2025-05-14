@@ -1,4 +1,45 @@
 {{!< layouts/main }}
+<div class="ml-64">
+  <div class="p-8">
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
+    
+    <!-- Añadir botones de acceso rápido -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <a href="/properties" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg">
+        Gestión de Predios
+      </a>
+      <button id="go-to-upload" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg">
+        Subir Documentos
+      </button>
+      
+      <script>
+        document.getElementById('go-to-upload').addEventListener('click', function() {
+          const token = localStorage.getItem('token');
+          if (token) {
+            window.location.href = `/upload?token=${encodeURIComponent(token)}`;
+          } else {
+            alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+            window.location.href = '/';
+          }
+        });
+      </script>
+    </div>
+    
+    <!-- Resto del contenido del dashboard -->
+  </div>
+</div>
+
+<script>
+  document.getElementById('go-to-upload').addEventListener('click', function() {
+    const token = localStorage.getItem('token');
+    if (token) {
+      window.location.href = `/upload?token=${encodeURIComponent(token)}`;
+    } else {
+      alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+      window.location.href = '/';
+    }
+  });
+</script>
 
 <!-- Barra lateral izquierda -->
 <div class="fixed inset-y-0 left-0 w-64 bg-blue-800 text-white shadow-lg">
@@ -19,7 +60,7 @@
       Tablero de Control
     </a>
     
-    <a href="/upload" class="block px-4 py-2 text-white hover:bg-blue-700 flex items-center">
+    <a href="#" id="upload-link" class="block px-4 py-2 text-white hover:bg-blue-700 flex items-center">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
       </svg>
@@ -335,5 +376,17 @@
     sessionStorage.removeItem('token');
     // Redireccionar al login
     window.location.href = '/';
+  });
+  
+  // Enlace de subida de documentos con token
+  document.getElementById('upload-link').addEventListener('click', function(e) {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (token) {
+      window.location.href = `/upload?token=${encodeURIComponent(token)}`;
+    } else {
+      alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+      window.location.href = '/';
+    }
   });
 </script>

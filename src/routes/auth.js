@@ -6,21 +6,7 @@ const jwt = require('jsonwebtoken');
 router.post('/', async (req, res) => {
   const { email, password } = req.body;
 
-  console.log("Recibido desde el frontend:", { email, password });
-
   try {
-    // Primero, obtener todos los usuarios para debug
-    const todosLosUsuarios = await db.collection('usuarios').get();
-    console.log("🔍 Todos los usuarios en la colección:");
-    console.log(`📄 Número de documentos encontrados en 'usuarios': ${todosLosUsuarios.size}`);
-    
-    // Imprimir cada documento con más detalle
-    todosLosUsuarios.forEach(doc => {
-      const userData = doc.data();
-      console.log(`ID: ${doc.id}, Email: "${userData.email}", Password: "${userData.password}"`);
-      console.log(`Comparación: "${email.toLowerCase()}" === "${userData.email}" => ${email.toLowerCase() === userData.email}`);
-    });
-
     const usuariosRef = db.collection('usuarios');
     const querySnapshot = await usuariosRef
       .where('email', '==', email.toLowerCase())
@@ -28,21 +14,17 @@ router.post('/', async (req, res) => {
       .get();
 
     if (querySnapshot.empty) {
-      console.log("⚠️ Usuario no encontrado con email:", email);
       return res.status(401).json({ message: 'Usuario no encontrado' });
     }
 
     const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
 
-    console.log("📄 Usuario Firestore:", userData);
-
     if (!userData.activo) {
       return res.status(403).json({ message: 'Usuario desactivado' });
     }
 
     if (userData.password !== password) {
-      console.log("❌ Contraseña incorrecta para usuario:", email);
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
@@ -52,11 +34,10 @@ router.post('/', async (req, res) => {
       rol: userData.rol
     }, process.env.JWT_SECRET, { expiresIn: '2h' });
 
-    console.log("✅ Login exitoso para usuario:", email);
     res.json({ token });
 
   } catch (err) {
-    console.error("❌ Error en autenticación:", err);
+    console.error("Error en autenticación:", err);
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
@@ -85,7 +66,6 @@ router.post('/register', async (req, res) => {
     
     const docRef = await usuariosRef.add(nuevoUsuario);
     
-    console.log(`✅ Usuario registrado correctamente: ${email}, ID: ${docRef.id}`);
     res.status(201).json({ 
       message: 'Usuario registrado correctamente',
       uid: docRef.id 

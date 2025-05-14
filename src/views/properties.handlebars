@@ -2,6 +2,63 @@
 <div class="ml-64">
   <div id="properties-management" class="p-8">
     <h2 class="text-2xl font-bold text-gray-800 mb-6">Gestión de Predios</h2>
-    <!-- Aquí va la lista y el formulario de predios -->
-  </div>
-</div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Lista de predios -->
+      <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow-md">
+          <div class="border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-800">Predios</h3>
+            <button id="add-property-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded-lg text-sm flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+              </svg>
+              Nuevo
+            </button>
+          </div>
+          <div class="p-4">
+            <div class="mb-4">
+              <input type="text" id="property-search" class="w-full px-4 py-2 border rounded-lg" placeholder="Buscar predio...">
+            </div>
+            <div id="property-list" class="max-h-96 overflow-y-auto">
+              <!-- Se llenará dinámicamente con JavaScript -->
+              <p class="text-gray-500 text-center py-4">Cargando predios...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Detalles del predio y documentos -->
+      <div class="lg:col-span-2">
+        <div id="property-details" class="bg-white rounded-lg shadow-md mb-6 hidden">
+          <div class="border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-800">Detalles del Predio</h3>
+            <div>
+              <button id="edit-property-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-1 px-3 rounded-lg text-sm mr-2">
+                Editar
+              </button>
+              <button id="delete-property-btn" class="bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-lg text-sm">
+                Eliminar
+              </button>
+            </div>
+          </div>
+          <div class="p-6">
+            <div id="property-info">
+              <!-- Se llenará dinámicamente con JavaScript -->
+            </div>
+          </div>
+        </div>
+        
+        <div id="property-documents" class="bg-white rounded-lg shadow-md hidden">
+          <div class="border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-800">Documentos del Predio</h3>
+            <a id="upload-document-btn" href="/upload" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded-lg text-sm flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+              </svg>
+              Subir Documento
+            </a>
+          </div>
+          <div class="p-6">
+            <div id="document-list">
+              <!-- Se

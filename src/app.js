@@ -4,7 +4,8 @@ const morgan = require('morgan');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const { admin, db } = require('./firebase');
-
+const cookieParser = require('cookie-parser'); 
+require('dotenv').config();
 const app = express();
 
 // Handlebars (debe ir antes de usar res.render)
@@ -16,24 +17,37 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(morgan('dev'));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+app.use(cookieParser()); // Agregar esta línea
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas importadas
 const authRoutes = require('./routes/auth.js');
 app.use('/auth', authRoutes);
 
-// Middleware de token
+// Middleware para verificar token
 function verificarToken(req, res, next) {
-  const token = req.headers.authorization?.split('Bearer ')[1];
-  if (!token) return res.status(401).json({ error: 'Token requerido' });
-
+  // Obtener token del header Authorization, query params o cookies
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1] || 
+                req.query.token || 
+                req.cookies.token;
+  
+  console.log('Token recibido:', token);
+  console.log('Query params:', req.query);
+  console.log('Cookies:', req.cookies);
+  
+  if (!token) {
+      console.log('No se proporcionó token');
+      return res.status(401).json({ error: 'Token requerido' });
+  }
+  
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.usuario = decoded;
-    next();
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.usuario = decoded;
+      next();
   } catch (error) {
-    console.error('Error al verificar token:', error.message);
-    res.status(401).json({ error: 'Token inválido' });
+      console.error('Error al verificar token:', error);
+      return res.status(401).json({ error: 'Token inválido' });
   }
 }
 
@@ -56,7 +70,11 @@ app.get('/register', (req, res) => res.render('register'));
 
 // Rutas protegidas
 app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));
-app.get('/upload', verificarToken, (req, res) => res.render('upload', { usuario: req.usuario }));
+app.get('/upload', verificarToken, (req, res) => {
+    // Pasar el ID del predio a la vista si está presente en la URL
+    const propertyId = req.query.propertyId || null;
+    res.render('upload', { usuario: req.usuario, propertyId: propertyId });
+});
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
 
 module.exports = app;
