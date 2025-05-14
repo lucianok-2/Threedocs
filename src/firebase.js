@@ -1,16 +1,29 @@
 require('dotenv').config();
 const admin = require('firebase-admin');
 
-// Log para verificar si FIREBASE_PROJECT_ID se carga desde .env
-console.log(`Valor de FIREBASE_PROJECT_ID en firebase.js: ${process.env.FIREBASE_PROJECT_ID}`);
+// Verificar si la variable de entorno existe
+if (!process.env.FIREBASE_ADMIN_KEY) {
+  console.error('Error: La variable de entorno FIREBASE_ADMIN_KEY no está definida');
+  process.exit(1); // Detener la aplicación si falta la configuración crítica
+}
 
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-  })
-});
-
-const db = admin.firestore();
-module.exports = { admin, db }; // Asegúrate de que 'admin' se exporta aquí
+try {
+  // Parsear el JSON de la variable de entorno
+  const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+  
+  // Log para verificar que se ha cargado correctamente
+  console.log(`Firebase Admin SDK inicializando con Project ID: ${serviceAccount.project_id}`);
+  
+  // Inicializar Firebase Admin con el objeto de credenciales
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  
+  const db = admin.firestore();
+  console.log('✅ Firebase Admin SDK inicializado correctamente');
+  
+  module.exports = { admin, db };
+} catch (error) {
+  console.error('Error al inicializar Firebase Admin SDK:', error);
+  process.exit(1); // Detener la aplicación si hay un error en la inicialización
+}

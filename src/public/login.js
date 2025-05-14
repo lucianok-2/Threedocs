@@ -14,13 +14,19 @@ document.getElementById('login-btn').addEventListener('click', async function ()
         const result = await response.json();
     
         if (response.ok) {
-            sessionStorage.setItem('token', result.token);
-            window.location.href = '/dashboard';
+            // Guardar el token en localStorage en lugar de sessionStorage para mayor persistencia
+            localStorage.setItem('token', result.token);
+            
+            // Configurar el token como header por defecto para futuras peticiones
+            const token = result.token;
+            
+            // Redireccionar al dashboard con el token como parámetro de consulta
+            window.location.href = `/dashboard?token=${token}`;
         } else {
             alert(result.message || 'Error de autenticación');
-            
         }
     } catch (error) {
+        console.error('Error en la autenticación:', error);
         alert('Error al conectar con el servidor');
     }
 });

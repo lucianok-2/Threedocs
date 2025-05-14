@@ -25,14 +25,15 @@ app.use('/auth', authRoutes);
 // Middleware de token
 function verificarToken(req, res, next) {
   const token = req.headers.authorization?.split('Bearer ')[1];
-  if (!token) return res.status(401).send('Token requerido');
+  if (!token) return res.status(401).json({ error: 'Token requerido' });
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.usuario = decoded;
     next();
-  } catch {
-    res.status(401).send('Token inválido');
+  } catch (error) {
+    console.error('Error al verificar token:', error.message);
+    res.status(401).json({ error: 'Token inválido' });
   }
 }
 
@@ -49,6 +50,9 @@ app.get('/firebase-config.js', (req, res) => {
 
 
 app.get('/', (req, res) => res.render('login'));
+
+// Agregar esta nueva ruta para el registro
+app.get('/register', (req, res) => res.render('register'));
 
 // Rutas protegidas
 app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));

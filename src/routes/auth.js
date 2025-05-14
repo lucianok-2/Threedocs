@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { admin, db } = require('../firebase'); // Asegúrate que 'admin' se exporta desde firebase.js
+const { admin, db } = require('../firebase');
 const jwt = require('jsonwebtoken');
 
 router.post('/', async (req, res) => {
@@ -9,19 +9,16 @@ router.post('/', async (req, res) => {
   console.log("Recibido desde el frontend:", { email, password });
 
   try {
-    // Log para verificar el Project ID con el que Firebase Admin SDK está inicializado
-    if (admin.apps.length > 0) { // Verificar que la app por defecto está inicializada
-      console.log(`Firebase Admin SDK Project ID: ${admin.app().options.projectId}`);
-    } else {
-      console.log("Firebase Admin SDK no parece estar inicializado.");
-    }
-
     // Primero, obtener todos los usuarios para debug
     const todosLosUsuarios = await db.collection('usuarios').get();
     console.log("🔍 Todos los usuarios en la colección:");
     console.log(`📄 Número de documentos encontrados en 'usuarios': ${todosLosUsuarios.size}`);
+    
+    // Imprimir cada documento con más detalle
     todosLosUsuarios.forEach(doc => {
-      console.log(`ID: ${doc.id}, Datos:`, doc.data());
+      const userData = doc.data();
+      console.log(`ID: ${doc.id}, Email: "${userData.email}", Password: "${userData.password}"`);
+      console.log(`Comparación: "${email.toLowerCase()}" === "${userData.email}" => ${email.toLowerCase() === userData.email}`);
     });
 
     const usuariosRef = db.collection('usuarios');
@@ -60,6 +57,41 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     console.error("❌ Error en autenticación:", err);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Agregar esta nueva ruta para el registro
+router.post('/register', async (req, res) => {
+  const { email, password, role, active } = req.body;
+  
+  try {
+    // Verificar si el usuario ya existe
+    const usuariosRef = db.collection('usuarios');
+    const snapshot = await usuariosRef.where('email', '==', email.toLowerCase()).get();
+    
+    if (!snapshot.empty) {
+      return res.status(400).json({ message: 'El correo electrónico ya está registrado' });
+    }
+    
+    // Crear nuevo usuario
+    const nuevoUsuario = {
+      email: email.toLowerCase(),
+      password, // Considera usar hash para la contraseña en producción
+      rol: role,
+      activo: active,
+      fechaRegistro: new Date().toISOString()
+    };
+    
+    const docRef = await usuariosRef.add(nuevoUsuario);
+    
+    console.log(`✅ Usuario registrado correctamente: ${email}, ID: ${docRef.id}`);
+    res.status(201).json({ 
+      message: 'Usuario registrado correctamente',
+      uid: docRef.id 
+    });
+  } catch (error) {
+    console.error('Error al registrar usuario:', error);
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
