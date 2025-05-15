@@ -38,7 +38,7 @@ function verificarToken(req, res, next) {
   
   if (!token) {
       console.log('No se proporcionó token');
-      return res.status(401).json({ error: 'Token requerido' });
+      return res.redirect('/');
   }
   
   try {
@@ -47,7 +47,7 @@ function verificarToken(req, res, next) {
       next();
   } catch (error) {
       console.error('Error al verificar token:', error);
-      return res.status(401).json({ error: 'Token inválido' });
+      return res.redirect('/');
   }
 }
 
@@ -76,5 +76,11 @@ app.get('/upload', verificarToken, (req, res) => {
     res.render('upload', { usuario: req.usuario, propertyId: propertyId });
 });
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
+
+// Ruta para cerrar sesión
+app.get('/logout', (req, res) => { 
+   res.clearCookie('token'); // borra la cookie token
+   res.redirect('/');        // redirige al login o inicio
+});
 
 module.exports = app;
