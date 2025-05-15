@@ -21,7 +21,7 @@ document.getElementById('login-btn').addEventListener('click', async function ()
             document.cookie = `token=${result.token}; path=/; max-age=86400; SameSite=Strict`;
             
             // Redireccionar con el token como parámetro de consulta
-            window.location.href = `/dashboard?token=${encodeURIComponent(result.token)}`;
+            window.location.href = `/dashboard`;
         } else {
             alert(result.message || 'Error de autenticación');
         }
