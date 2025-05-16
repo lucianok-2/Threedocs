@@ -140,12 +140,16 @@ function selectProperty(propertyId) {
   uploadDocumentBtn.href = `/upload?propertyId=${propertyId}&token=${token}`;
 }
 
-// Cargar detalles del predio
+// Función para cargar los detalles del predio
 function loadPropertyDetails(propertyId) {
   const propertyInfo = document.getElementById('property-info');
+  const propertyDetails = document.getElementById('property-details');
+  const propertyDocuments = document.getElementById('property-documents');
   const db = firebase.firestore();
   
   propertyInfo.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando detalles...</p>';
+  propertyDetails.classList.remove('hidden');
+  propertyDocuments.classList.remove('hidden');
   
   db.collection('predios').doc(propertyId).get()
     .then(doc => {
@@ -174,6 +178,22 @@ function loadPropertyDetails(propertyId) {
             <p class="text-sm text-gray-600 mb-1">Superficie:</p>
             <p class="font-medium text-gray-800 mb-3">${data.superficie ? `${data.superficie} ha` : 'Sin información'}</p>
           </div>
+          <div>
+            <p class="text-sm text-gray-600 mb-1">Propietario:</p>
+            <p class="font-medium text-gray-800 mb-3">${data.propietario?.nombre || 'Sin información'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600 mb-1">RUT Propietario:</p>
+            <p class="font-medium text-gray-800 mb-3">${data.propietario?.rut || 'Sin información'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600 mb-1">Modelo de Compra:</p>
+            <p class="font-medium text-gray-800 mb-3">${data.modeloCompra || 'Sin información'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600 mb-1">Certificaciones:</p>
+            <p class="font-medium text-gray-800 mb-3">${getCertificacionesText(data.certificaciones) || 'Sin certificaciones'}</p>
+          </div>
           <div class="md:col-span-2">
             <p class="text-sm text-gray-600 mb-1">Descripción:</p>
             <p class="font-medium text-gray-800 mb-3">${data.descripcion || 'Sin descripción'}</p>
@@ -182,6 +202,9 @@ function loadPropertyDetails(propertyId) {
       `;
       
       propertyInfo.innerHTML = detailsHTML;
+      
+      // Cargar documentos del predio
+      loadPropertyDocuments(propertyId);
     })
     .catch(error => {
       console.error('Error al cargar detalles del predio:', error);
@@ -189,107 +212,213 @@ function loadPropertyDetails(propertyId) {
     });
 }
 
-// Cargar documentos del predio
+// Función para mostrar el modal de edición
+function showEditPropertyModal() {
+  const propertyId = localStorage.getItem('selectedPropertyId');
+  if (!propertyId) {
+    alert('No se ha seleccionado ningún predio para editar');
+    return;
+  }
+  
+  const db = firebase.firestore();
+  
+  // Obtener los datos actuales del predio
+  db.collection('predios').doc(propertyId).get()
+    .then(doc => {
+      if (!doc.exists) {
+        alert('El predio seleccionado no existe');
+        return;
+      }
+      
+      const data = doc.data();
+      
+      // Llenar el formulario con los datos actuales
+      document.getElementById('edit-property-id').value = propertyId;
+      document.getElementById('edit-property-name').value = data.nombre || '';
+      document.getElementById('edit-purchase-model').value = data.modeloCompra || 'Propietario';
+      document.getElementById('edit-property-rol').value = data.rol || '';
+      document.getElementById('edit-owner-rut').value = data.propietario?.rut || '';
+      document.getElementById('edit-owner-name').value = data.propietario?.nombre || '';
+      
+      // Marcar las certificaciones
+      if (data.certificaciones) {
+        document.getElementById('edit-cert-fsc').checked = data.certificaciones.includes('FSC');
+        document.getElementById('edit-cert-pefc').checked = data.certificaciones.includes('PEFC');
+        document.getElementById('edit-cert-none').checked = data.certificaciones.includes('Sin Certificación');
+      }
+      
+      // Mostrar nombres de archivos si existen
+      if (data.documentos?.planManejo) {
+        document.getElementById('plan-manejo-preview').classList.remove('hidden');
+        document.getElementById('plan-manejo-filename').textContent = data.documentos.planManejo.nombre || 'archivo.pdf';
+      } else {
+        document.getElementById('plan-manejo-preview').classList.add('hidden');
+      }
+      
+      if (data.documentos?.facturaCompra) {
+        document.getElementById('factura-preview').classList.remove('hidden');
+        document.getElementById('factura-filename').textContent = data.documentos.facturaCompra.nombre || 'archivo.pdf';
+      } else {
+        document.getElementById('factura-preview').classList.add('hidden');
+      }
+      
+      // Mostrar el modal
+      document.getElementById('edit-property-modal').classList.remove('hidden');
+    })
+    .catch(error => {
+      console.error('Error al cargar datos para edición:', error);
+      alert('Error al cargar los datos del predio');
+    });
+}
+
+// Función para cerrar el modal de edición
+function closeEditPropertyModal() {
+  document.getElementById('edit-property-modal').classList.add('hidden');
+}
+
+// Función para actualizar el predio
+function updateProperty(event) {
+  event.preventDefault();
+  
+  const propertyId = document.getElementById('edit-property-id').value;
+  const db = firebase.firestore();
+  const storage = firebase.storage();
+  
+  // Recopilar datos del formulario
+  const propertyData = {
+    nombre: document.getElementById('edit-property-name').value,
+    modeloCompra: document.getElementById('edit-purchase-model').value,
+    rol: document.getElementById('edit-property-rol').value,
+    propietario: {
+      rut: document.getElementById('edit-owner-rut').value,
+      nombre: document.getElementById('edit-owner-name').value
+    },
+    certificaciones: []
+  };
+  
+  // Agregar certificaciones seleccionadas
+  if (document.getElementById('edit-cert-fsc').checked) {
+    propertyData.certificaciones.push('FSC');
+  }
+  if (document.getElementById('edit-cert-pefc').checked) {
+    propertyData.certificaciones.push('PEFC');
+  }
+  if (document.getElementById('edit-cert-none').checked) {
+    propertyData.certificaciones.push('Sin Certificación');
+  }
+  
+  // Iniciar la actualización
+  let updatePromise = Promise.resolve();
+  
+  // Manejar la subida de archivos si se seleccionaron
+  const planManejoFile = document.getElementById('edit-plan-manejo').files[0];
+  const facturaFile = document.getElementById('edit-factura').files[0];
+  
+  if (planManejoFile) {
+    updatePromise = updatePromise.then(() => {
+      const fileRef = storage.ref(`predios/${propertyId}/plan_manejo/${planManejoFile.name}`);
+      return fileRef.put(planManejoFile).then(() => {
+        return fileRef.getDownloadURL().then(url => {
+          if (!propertyData.documentos) propertyData.documentos = {};
+          propertyData.documentos.planManejo = {
+            nombre: planManejoFile.name,
+            url: url,
+            fecha: new Date()
+          };
+        });
+      });
+    });
+  }
+  
+  if (facturaFile) {
+    updatePromise = updatePromise.then(() => {
+      const fileRef = storage.ref(`predios/${propertyId}/factura_compra/${facturaFile.name}`);
+      return fileRef.put(facturaFile).then(() => {
+        return fileRef.getDownloadURL().then(url => {
+          if (!propertyData.documentos) propertyData.documentos = {};
+          propertyData.documentos.facturaCompra = {
+            nombre: facturaFile.name,
+            url: url,
+            fecha: new Date()
+          };
+        });
+      });
+    });
+  }
+  
+  // Actualizar el documento en Firestore
+  updatePromise.then(() => {
+    return db.collection('predios').doc(propertyId).update(propertyData);
+  })
+  .then(() => {
+    alert('Predio actualizado correctamente');
+    closeEditPropertyModal();
+    loadPropertyDetails(propertyId); // Recargar los detalles
+  })
+  .catch(error => {
+    console.error('Error al actualizar el predio:', error);
+    alert('Error al actualizar el predio');
+  });
+}
+
+// Función auxiliar para mostrar las certificaciones en texto
+function getCertificacionesText(certificaciones) {
+  if (!certificaciones || certificaciones.length === 0) {
+    return 'Sin certificaciones';
+  }
+  return certificaciones.join(', ');
+}
+
+// Función para cargar los documentos del predio
 function loadPropertyDocuments(propertyId) {
   const documentList = document.getElementById('document-list');
   const db = firebase.firestore();
   
   documentList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando documentos...</p>';
   
-  db.collection('documentos')
-    .where('predioId', '==', propertyId)
-    .get()
-    .then(snapshot => {
-      if (snapshot.empty) {
-        documentList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay documentos para este predio</p>';
+  db.collection('predios').doc(propertyId).get()
+    .then(doc => {
+      if (!doc.exists || !doc.data().documentos) {
+        documentList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay documentos disponibles</p>';
         return;
       }
       
-      // Agrupar documentos por tipo
-      const documentsByType = {};
+      const documentos = doc.data().documentos;
+      let documentsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
       
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        if (!documentsByType[data.tipo]) {
-          documentsByType[data.tipo] = [];
-        }
-        documentsByType[data.tipo].push({
-          id: doc.id,
-          ...data
-        });
-      });
-      
-      // Nombres de los tipos de documentos
-      const documentTypes = {
-        1: 'CONSULTA ANTECEDENTE BIEN RAIZ (SII)',
-        2: 'RESOLUCIÓN PLAN DE MANEJO',
-        3: 'AVISO EJECUCION DE FAENA',
-        4: 'ESCRITURA O TITULOS DE DOMINIO',
-        6: 'CONTRATO COMPRA Y VENTA',
-        7: 'PLANO DEL PREDIO',
-        8: 'CONTRATO DE TRABAJO',
-        9: 'DERECHO A SABER',
-        10: 'ENTREGA EPP',
-        11: 'VARIOS',
-        12: 'REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD',
-        13: 'REGISTRO DE CAPACITACIÓN',
-        14: 'DOCTO. ADICIONAL'
-      };
-      
-      let documentsHTML = '';
-      
-      // Generar HTML para cada tipo de documento
-      Object.keys(documentsByType).forEach(typeId => {
-        const typeName = documentTypes[typeId] || `Tipo ${typeId}`;
-        
+      if (documentos.planManejo) {
         documentsHTML += `
-          <div class="mb-6">
-            <h4 class="font-medium text-gray-700 mb-3">${typeName}</h4>
-            <div class="space-y-2">
-        `;
-        
-        documentsByType[typeId].forEach(doc => {
-          const date = doc.fechaSubida ? new Date(doc.fechaSubida.seconds * 1000).toLocaleDateString() : 'Fecha desconocida';
-          
-          documentsHTML += `
-            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <div>
-                <p class="font-medium text-gray-800">${doc.nombre}</p>
-                <p class="text-sm text-gray-600">Subido el ${date}</p>
-              </div>
-              <div>
-                <a href="${doc.url}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                  </svg>
-                </a>
-                <button class="text-red-600 hover:text-red-800 delete-document" data-id="${doc.id}">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                  </svg>
-                </button>
-              </div>
+          <div class="border rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+              </svg>
+              <span class="font-medium">Plan de Manejo</span>
             </div>
-          `;
-        });
-        
-        documentsHTML += `
-            </div>
+            <p class="text-sm text-gray-600 mb-2">${documentos.planManejo.nombre}</p>
+            <a href="${documentos.planManejo.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">Ver documento</a>
           </div>
         `;
-      });
+      }
+      
+      if (documentos.facturaCompra) {
+        documentsHTML += `
+          <div class="border rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+              </svg>
+              <span class="font-medium">Factura Compra</span>
+            </div>
+            <p class="text-sm text-gray-600 mb-2">${documentos.facturaCompra.nombre}</p>
+            <a href="${documentos.facturaCompra.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">Ver documento</a>
+          </div>
+        `;
+      }
+      
+      documentsHTML += '</div>';
       
       documentList.innerHTML = documentsHTML;
-      
-      // Agregar event listeners a los botones de eliminar
-      const deleteButtons = document.querySelectorAll('.delete-document');
-      deleteButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const docId = this.getAttribute('data-id');
-          confirmDeleteDocument(docId);
-        });
-      });
     })
     .catch(error => {
       console.error('Error al cargar documentos:', error);
@@ -314,78 +443,569 @@ function searchProperties(query) {
   });
 }
 
-// Mostrar formulario para agregar predio
-function showAddPropertyForm() {
-  // Implementar según necesidades
-  alert('Funcionalidad para agregar predio en desarrollo');
-}
+// Cuando el DOM esté cargado
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM cargado completamente');
+  
+  // Configurar event listeners si setupEventListeners aún no ha sido llamado
+  if (!document.getElementById('add-property-btn').hasAttribute('data-initialized')) {
+    const addPropertyBtn = document.getElementById('add-property-btn');
+    if (addPropertyBtn) {
+      addPropertyBtn.setAttribute('data-initialized', 'true');
+      addPropertyBtn.addEventListener('click', function() {
+        console.log('Botón Nuevo clickeado');
+        showAddPropertyForm();
+      });
+    }
+  }
+});
 
-// Mostrar formulario para editar predio
-function showEditPropertyForm(propertyId) {
-  // Implementar según necesidades
-  alert('Funcionalidad para editar predio en desarrollo');
-}
-
-// Confirmar eliminación de predio
-function confirmDeleteProperty(propertyId) {
-  if (confirm('¿Está seguro que desea eliminar este predio? Esta acción no se puede deshacer.')) {
-    deleteProperty(propertyId);
+// Función para mostrar el modal de nuevo predio
+function mostrarModalNuevoPredio() {
+  console.log('Mostrando modal de nuevo predio');
+  const modal = document.getElementById('nuevo-predio-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    console.error('No se encontró el modal nuevo-predio-modal');
   }
 }
 
-// Eliminar predio
-function deleteProperty(propertyId) {
+// Función para cerrar el modal de nuevo predio
+function cerrarModalNuevoPredio() {
+  console.log('Cerrando modal de nuevo predio');
+  const modal = document.getElementById('nuevo-predio-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    const form = document.getElementById('nuevo-predio-form');
+    if (form) {
+      form.reset();
+    }
+  }
+}
+
+// Función para guardar el nuevo predio
+function guardarNuevoPredio(e) {
+  e.preventDefault();
+  console.log('Guardando nuevo predio');
+  
+  // Recopilar datos del formulario
+  const propertyData = {
+    nombre: document.getElementById('property-name').value,
+    rol: document.getElementById('property-rol').value,
+    ubicacion: document.getElementById('property-location').value,
+    superficie: document.getElementById('property-area').value || null,
+    descripcion: document.getElementById('property-description')?.value || '',
+    certificacionFSC: document.getElementById('no-fsc').checked ? null : document.getElementById('fsc-certification').value,
+    certificacionPEFC: document.getElementById('no-pefc').checked ? null : document.getElementById('pefc-certification').value,
+    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  
+  console.log('Datos del predio:', propertyData);
+  
+  // Guardar en Firestore
   const db = firebase.firestore();
   
-  db.collection('predios').doc(propertyId).delete()
+  db.collection('predios').add(propertyData)
     .then(() => {
-      alert('Predio eliminado correctamente');
-      loadProperties();
-      document.getElementById('property-details').classList.add('hidden');
-      document.getElementById('property-documents').classList.add('hidden');
-      selectedPropertyId = null;
+      alert('Predio agregado correctamente');
+      cerrarModalNuevoPredio();
+      loadProperties(); // Recargar la lista de predios
     })
     .catch(error => {
-      console.error('Error al eliminar predio:', error);
-      alert('Error al eliminar el predio');
+      console.error('Error al agregar predio:', error);
+      alert('Error al agregar el predio: ' + error.message);
     });
 }
 
-// Confirmar eliminación de documento
-function confirmDeleteDocument(docId) {
-  if (confirm('¿Está seguro que desea eliminar este documento? Esta acción no se puede deshacer.')) {
-    deleteDocument(docId);
-  }
-}
-
-// Eliminar documento
-function deleteDocument(docId) {
-  const db = firebase.firestore();
-  const storage = firebase.storage();
-  
-  // Primero obtener la referencia al documento para conocer la ruta del archivo
-  db.collection('documentos').doc(docId).get()
-    .then(doc => {
-      if (!doc.exists) {
-        throw new Error('Documento no encontrado');
+// Función para mostrar el modal de agregar predio
+function showAddPropertyModal() {
+  // Crear el modal si no existe
+  if (!document.getElementById('add-property-modal')) {
+    const modalHTML = `
+      <div id="add-property-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl">
+          <div class="border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-800">Agregar Nuevo Predio</h3>
+            <button id="close-add-modal" class="text-gray-500 hover:text-gray-700">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="p-6">
+            <form id="add-property-form">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label for="property-name" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Predio</label>
+                  <input type="text" id="property-name" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label for="property-rol" class="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+                  <input type="text" id="property-rol" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label for="property-location" class="block text-sm font-medium text-gray-700 mb-1">Ubicación</label>
+                  <input type="text" id="property-location" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label for="property-area" class="block text-sm font-medium text-gray-700 mb-1">Superficie (ha)</label>
+                  <input type="number" id="property-area" class="w-full px-3 py-2 border rounded-lg" step="0.01">
+                </div>
+                <div class="md:col-span-2">
+                  <label for="property-description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                  <textarea id="property-description" class="w-full px-3 py-2 border rounded-lg" rows="3"></textarea>
+                </div>
+              </div>
+              
+              <h4 class="font-medium text-gray-700 mb-3">Información del Propietario</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label for="propietario-rut" class="block text-sm font-medium text-gray-700 mb-1">RUT Propietario</label>
+                  <input type="text" id="propietario-rut" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label for="propietario-nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre Propietario</label>
+                  <input type="text" id="propietario-nombre" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+              </div>
+              
+              <h4 class="font-medium text-gray-700 mb-3">Modelo de Compra</h4>
+              <div class="mb-4">
+                <select id="purchase-model" class="w-full px-3 py-2 border rounded-lg" required>
+                  <option value="">Seleccione un modelo</option>
+                  <option value="directo">Compra Directa</option>
+                  <option value="intermediario">Con Intermediario</option>
+                </select>
+              </div>
+              
+              <div id="intermediario-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label for="intermediario-rut" class="block text-sm font-medium text-gray-700 mb-1">RUT Intermediario</label>
+                  <input type="text" id="intermediario-rut" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+                <div>
+                  <label for="intermediario-nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre Intermediario</label>
+                  <input type="text" id="intermediario-nombre" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+              </div>
+              
+              <div class="flex justify-end">
+                <button type="button" id="cancel-add-property" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg mr-2">Cancelar</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg">Guardar Predio</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Agregar event listeners al modal
+    document.getElementById('close-add-modal').addEventListener('click', closeAddPropertyModal);
+    document.getElementById('cancel-add-property').addEventListener('click', closeAddPropertyModal);
+    document.getElementById('add-property-form').addEventListener('submit', saveProperty);
+    
+    // Mostrar/ocultar campos de intermediario según el modelo de compra
+    document.getElementById('purchase-model').addEventListener('change', function() {
+      const intermediarioFields = document.getElementById('intermediario-fields');
+      if (this.value === 'intermediario') {
+        intermediarioFields.classList.remove('hidden');
+      } else {
+        intermediarioFields.classList.add('hidden');
       }
+    });
+  }
+  
+  // Mostrar el modal
+  document.getElementById('add-property-modal').classList.remove('hidden');
+}
+
+// Función para cerrar el modal de agregar predio
+function closeAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.getElementById('add-property-form').reset();
+  }
+}
+
+// Función para validar RUT chileno
+function validateRUT(rutInput) {
+  const rutValue = rutInput.value.replace(/\./g, '').replace('-', '');
+  if (rutValue.length < 2) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  const dv = rutValue.slice(-1);
+  const rut = rutValue.slice(0, -1);
+  
+  let suma = 0;
+  let multiplo = 2;
+  
+  for (let i = rut.length - 1; i >= 0; i--) {
+    suma += parseInt(rut.charAt(i)) * multiplo;
+    multiplo = multiplo < 7 ? multiplo + 1 : 2;
+  }
+  
+  const dvEsperado = 11 - (suma % 11);
+  const dvCalculado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : dvEsperado.toString();
+  
+  if (dv.toUpperCase() !== dvCalculado) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  return true;
+}
+
+// Función para mostrar el formulario de agregar predio
+function showAddPropertyForm() {
+  console.log('Botón Nuevo clickeado');
+  
+  // Crear el modal si no existe
+  if (!document.getElementById('add-property-modal')) {
+    const modalHTML = `
+      <div id="add-property-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto">
+          <div class="border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-800">Agregar Nuevo Predio</h3>
+            <button id="close-add-modal" class="text-gray-500 hover:text-gray-700">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div class="p-6">
+            <form id="add-property-form" class="space-y-6">
+              <!-- Información básica del predio -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del Predio <span class="text-red-500">*</span></label>
+                  <input type="text" id="property-name" class="w-full px-4 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Rol <span class="text-red-500">*</span></label>
+                  <input type="text" id="property-rol" class="w-full px-4 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Ubicación <span class="text-red-500">*</span></label>
+                  <input type="text" id="property-location" class="w-full px-4 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Superficie (ha)</label>
+                  <input type="number" id="property-area" class="w-full px-4 py-2 border rounded-lg" step="0.01">
+                </div>
+              </div>
+              
+              <!-- Descripción -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <textarea id="property-description" class="w-full px-4 py-2 border rounded-lg" rows="3"></textarea>
+              </div>
+              
+              <div class="flex justify-end">
+                <button type="button" id="cancel-add-property" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg mr-2">Cancelar</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg">Guardar Predio</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Agregar el modal al DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Configurar event listeners
+    document.getElementById('close-add-modal').addEventListener('click', closeAddPropertyModal);
+    document.getElementById('cancel-add-property').addEventListener('click', closeAddPropertyModal);
+    document.getElementById('add-property-form').addEventListener('submit', saveProperty);
+  }
+  
+  // Mostrar el modal
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    console.error('No se encontró el modal add-property-modal');
+  }
+}
+
+// Función para cerrar el modal
+function closeAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.getElementById('add-property-form').reset();
+  }
+}
+
+// Función para validar RUT chileno
+function validateRUT(rutInput) {
+  const rutValue = rutInput.value.replace(/\./g, '').replace('-', '');
+  if (rutValue.length < 2) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  const dv = rutValue.slice(-1);
+  const rut = rutValue.slice(0, -1);
+  
+  let suma = 0;
+  let multiplo = 2;
+  
+  for (let i = rut.length - 1; i >= 0; i--) {
+    suma += parseInt(rut.charAt(i)) * multiplo;
+    multiplo = multiplo < 7 ? multiplo + 1 : 2;
+  }
+  
+  const dvEsperado = 11 - (suma % 11);
+  const dvCalculado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : dvEsperado.toString();
+  
+  if (dv.toUpperCase() !== dvCalculado) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  return true;
+}
+
+// Función para manejar el cambio en el modelo de compras
+function handlePurchaseModel() {
+  const purchaseModel = document.getElementById('purchase-model').value;
+  const intermediarioSection = document.getElementById('intermediario-section');
+  const facturaIntermediarioField = document.getElementById('factura-intermediario-field');
+  
+  if (purchaseModel === 'intermediario') {
+    intermediarioSection.style.display = 'block';
+    facturaIntermediarioField.style.display = 'block';
+    
+    // Hacer campos de intermediario requeridos
+    document.getElementById('intermediario-rut').required = true;
+    document.getElementById('intermediario-nombre').required = true;
+  } else {
+    intermediarioSection.style.display = 'none';
+    facturaIntermediarioField.style.display = 'none';
+    
+    // Quitar requerido de campos de intermediario
+    document.getElementById('intermediario-rut').required = false;
+    document.getElementById('intermediario-nombre').required = false;
+  }
+}
+
+// Función para validar RUT chileno
+function validateRUT(input) {
+  const rut = input.value.trim();
+  
+  // Expresión regular para validar formato RUT chileno (12.345.678-9)
+  const rutRegex = /^(\d{1,3}(\.?\d{3}){2}-[\dkK])$/;
+  
+  if (!rutRegex.test(rut) && rut !== '') {
+    input.classList.add('border-red-500');
+    alert('El formato del RUT no es válido. Utilice el formato 12.345.678-9');
+    return false;
+  } else {
+    input.classList.remove('border-red-500');
+    return true;
+  }
+}
+
+// Función para guardar el predio
+function saveProperty(event) {
+  event.preventDefault();
+  
+  // Obtener los valores del formulario
+  const nombre = document.getElementById('property-name').value;
+  const rol = document.getElementById('property-rol').value;
+  const ubicacion = document.getElementById('property-location').value;
+  const superficie = document.getElementById('property-area').value;
+  const descripcion = document.getElementById('property-description').value;
+  
+  // Validar campos requeridos
+  if (!nombre || !rol || !ubicacion) {
+    alert('Por favor complete todos los campos requeridos');
+    return;
+  }
+  
+  // Referencia a la base de datos
+  const db = firebase.firestore();
+  
+  // Crear objeto con los datos del predio
+  const predioData = {
+    nombre: nombre,
+    rol: rol,
+    ubicacion: ubicacion,
+    superficie: superficie ? parseFloat(superficie) : null,
+    descripcion: descripcion,
+    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  
+  // Mostrar indicador de carga
+  const submitButton = document.querySelector('#add-property-form button[type="submit"]');
+  const originalText = submitButton.innerHTML;
+  submitButton.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...';
+  submitButton.disabled = true;
+  
+  // Guardar en Firestore
+  db.collection('predios').add(predioData)
+    .then(docRef => {
+      console.log('Predio guardado con ID:', docRef.id);
       
-      const data = doc.data();
-      const filePath = data.ruta;
+      // Cerrar el modal
+      closeAddPropertyModal();
       
-      // Eliminar el archivo de Storage
-      return storage.ref(filePath).delete()
-        .then(() => {
-          // Eliminar el documento de Firestore
-          return db.collection('documentos').doc(docId).delete();
-        });
-    })
-    .then(() => {
-      alert('Documento eliminado correctamente');
-      loadPropertyDocuments(selectedPropertyId);
+      // Recargar la lista de predios
+      loadProperties();
+      
+      // Mostrar mensaje de éxito
+      alert('Predio guardado exitosamente');
     })
     .catch(error => {
-      console.error('Error al eliminar documento:', error);
-      alert('Error al eliminar el documento');
+      console.error('Error al guardar predio:', error);
+      alert('Error al guardar el predio: ' + error.message);
+    })
+    .finally(() => {
+      // Restaurar el botón
+      submitButton.innerHTML = originalText;
+      submitButton.disabled = false;
     });
 }
+
+function closeAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    // Limpiar el formulario
+    document.getElementById('add-property-form').reset();
+  }
+}
+
+// Función para validar RUT chileno
+function validateRUT(rutInput) {
+  const rutValue = rutInput.value.replace(/\./g, '').replace('-', '');
+  if (rutValue.length < 2) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  const dv = rutValue.slice(-1);
+  const rut = rutValue.slice(0, -1);
+  
+  let suma = 0;
+  let multiplo = 2;
+  
+  for (let i = rut.length - 1; i >= 0; i--) {
+    suma += parseInt(rut.charAt(i)) * multiplo;
+    multiplo = multiplo < 7 ? multiplo + 1 : 2;
+  }
+  
+  const dvEsperado = 11 - (suma % 11);
+  const dvCalculado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : dvEsperado.toString();
+  
+  if (dv.toUpperCase() !== dvCalculado) {
+    alert('RUT inválido');
+    return false;
+  }
+  
+  return true;
+}
+
+// Función para manejar el cambio en el modelo de compras
+function handlePurchaseModel() {
+  const purchaseModel = document.getElementById('purchase-model').value;
+  const intermediarioSection = document.getElementById('intermediario-section');
+  const facturaIntermediarioField = document.getElementById('factura-intermediario-field');
+  
+  if (purchaseModel === 'intermediario') {
+    intermediarioSection.style.display = 'block';
+    facturaIntermediarioField.style.display = 'block';
+    
+    // Hacer campos de intermediario requeridos
+    document.getElementById('intermediario-rut').required = true;
+    document.getElementById('intermediario-nombre').required = true;
+  } else {
+    intermediarioSection.style.display = 'none';
+    facturaIntermediarioField.style.display = 'none';
+    
+    // Quitar requerido de campos de intermediario
+    document.getElementById('intermediario-rut').required = false;
+    document.getElementById('intermediario-nombre').required = false;
+  }
+}
+
+// Función para validar RUT chileno
+function validateRUT(input) {
+  const rut = input.value.trim();
+  
+  // Expresión regular para validar formato RUT chileno (12.345.678-9)
+  const rutRegex = /^(\d{1,3}(\.?\d{3}){2}-[\dkK])$/;
+  
+  if (!rutRegex.test(rut) && rut !== '') {
+    input.classList.add('border-red-500');
+    alert('El formato del RUT no es válido. Utilice el formato 12.345.678-9');
+    return false;
+  } else {
+    input.classList.remove('border-red-500');
+    return true;
+  }
+}
+
+// Función para guardar el predio
+function saveProperty(e) {
+  e.preventDefault();
+  
+  // Validar RUTs
+  const propietarioRut = document.getElementById('propietario-rut');
+  const intermediarioRut = document.getElementById('intermediario-rut');
+  
+  if (!validateRUT(propietarioRut)) {
+    return;
+  }
+  
+  const purchaseModel = document.getElementById('purchase-model').value;
+  if (purchaseModel === 'intermediario' && !validateRUT(intermediarioRut)) {
+    return;
+  }
+  
+  // Recopilar datos del formulario
+  const propertyData = {
+    nombre: document.getElementById('property-name').value,
+    rol: document.getElementById('property-rol').value,
+    ubicacion: document.getElementById('property-location').value,
+    superficie: document.getElementById('property-area').value || null,
+    descripcion: document.getElementById('property-description').value || '',
+    certificacionFSC: document.getElementById('no-fsc').checked ? null : document.getElementById('fsc-certification').value,
+    certificacionPEFC: document.getElementById('no-pefc').checked ? null : document.getElementById('pefc-certification').value,
+    modeloCompra: document.getElementById('purchase-model').value,
+    compraDirecta: document.getElementById('compra-directa').value || null,
+    facturaPropietario: document.getElementById('factura-propietario').value || null,
+    facturaIntermediario: purchaseModel === 'intermediario' ? document.getElementById('factura-intermediario').value || null : null,
+    propietario: {
+      rut: propietarioRut.value,
+      nombre: document.getElementById('propietario-nombre').value,
+      planManejo: document.getElementById('no-plan-manejo').checked ? null : document.getElementById('plan-manejo').value
+    },
+    intermediario: purchaseModel === 'intermediario' ? {
+      rut: intermediarioRut.value,
+      nombre: document.getElementById('intermediario-nombre').value
+    } : null,
+    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  
+  // Guardar en Firestore
+  const db = firebase.firestore();
+  
+  db.collection('predios').add(propertyData)
+    .then(() => {
+      alert('Predio agregado correctamente');
+      closeAddPropertyModal();
+      loadProperties(); // Recargar la lista de predios
+    })
+    .catch(error => {
+      console.error('Error al agregar predio:', error);
+      alert('Error al agregar el predio');
+    });}

@@ -24,6 +24,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 const authRoutes = require('./routes/auth.js');
 app.use('/auth', authRoutes);
 
+// Importar y usar las rutas de predios
+const propertiesRoutes = require('./routes/properties.js');
+app.use('/api/predios', propertiesRoutes);
+
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies

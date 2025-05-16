@@ -1,45 +1,30 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ThreeDocs - Sistema de Gestión Documental</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ThreeDocs - Sistema de Gestión Documental</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .transition-transform {
+      transition: transform 0.3s ease;
+    }
+    
+    @media (max-width: 1023px) {
+      .ml-0 {
+        margin-left: 0;
+      }
+    }
+  </style>
 </head>
-<body class="bg-gray-100">
-    <!-- Barra de navegación superior -->
-    <nav class="bg-blue-800 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0 flex items-center">
-                        <span class="text-xl font-bold">ThreeDocs</span>
-                        <span class="ml-2 text-sm text-blue-300">Sistema de Gestión Documental</span>
-                    </div>
-                </div>
-                <div class="flex items-center">
-                    <a href="/logout" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg">
-                        Cerrar Sesión
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Contenido principal -->
-    <div class="container mx-auto">
-        {{{body}}}
-    </div>
-
-    <script>
-        // Script para verificar si estamos en la página de login
-        document.addEventListener('DOMContentLoaded', function() {
-            // Si estamos en la página de login, ocultar la barra de navegación
-            if (window.location.pathname === '/' || window.location.pathname === '/register') {
-                document.querySelector('nav').style.display = 'none';
-            }
-        });
-    </script>
+<body class="bg-gray-100 font-sans">
+  {{> sidebar}}
+  
+  <div class="ml-64 transition-transform" id="main-content">
+    {{{body}}}
+  </div>
+  
+  <script src="/js/sidebar.js"></script>
 </body>
 </html>
