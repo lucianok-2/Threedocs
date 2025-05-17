@@ -9,7 +9,18 @@ require('dotenv').config();
 const app = express();
 
 // Handlebars (debe ir antes de usar res.render)
-app.engine('handlebars', engine());
+app.engine('handlebars', engine({
+  // Definir layouts diferentes según la ruta
+  defaultLayout: 'main',
+  helpers: {
+    // Helper para determinar qué layout usar
+    section: function(name, options) {
+      if (!this._sections) this._sections = {};
+      this._sections[name] = options.fn(this);
+      return null;
+    }
+  }
+}));
 app.set('view engine', 'handlebars');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -67,12 +78,10 @@ app.get('/firebase-config.js', (req, res) => {
 });
 
 
-app.get('/', (req, res) => res.render('login'));
+app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
+app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
 
-// Agregar esta nueva ruta para el registro
-app.get('/register', (req, res) => res.render('register'));
-
-// Rutas protegidas
+// Rutas protegidas con layout principal (incluye sidebar)
 app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
