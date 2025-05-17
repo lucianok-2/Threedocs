@@ -21,11 +21,12 @@ function verificarToken(req, res, next) {
   }
 }
 
-// Obtener todos los predios
+// Obtener todos los predios del usuario actual
 router.get('/', verificarToken, async (req, res) => {
   try {
     const prediosRef = db.collection('predios');
-    const snapshot = await prediosRef.get();
+    // Filtrar por id_user igual al uid del usuario autenticado
+    const snapshot = await prediosRef.where('id_user', '==', req.usuario.uid).get();
     
     if (snapshot.empty) {
       return res.json([]);
@@ -46,7 +47,7 @@ router.get('/', verificarToken, async (req, res) => {
   }
 });
 
-// Obtener un predio específico
+// Obtener un predio específico (verificando que pertenezca al usuario)
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const predioRef = db.collection('predios').doc(req.params.id);
@@ -56,9 +57,16 @@ router.get('/:id', verificarToken, async (req, res) => {
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
     
+    const predioData = doc.data();
+    
+    // Verificar que el predio pertenezca al usuario actual
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para acceder a este predio' });
+    }
+    
     res.json({
       _id: doc.id,
-      ...doc.data()
+      ...predioData
     });
   } catch (error) {
     console.error('Error al obtener predio:', error);
@@ -75,7 +83,9 @@ router.post('/', verificarToken, async (req, res) => {
       rol: req.body.rol || '',
       superficie: req.body.superficie || null,
       descripcion: req.body.descripcion || '',
-      fechaCreacion: new Date()
+      fechaCreacion: new Date(),
+      // Guardar automáticamente el ID del usuario
+      id_user: req.usuario.uid
     };
     
     const docRef = await db.collection('predios').add(predioData);
@@ -90,7 +100,7 @@ router.post('/', verificarToken, async (req, res) => {
   }
 });
 
-// Actualizar un predio existente
+// Actualizar un predio existente (verificando que pertenezca al usuario)
 router.put('/:id', verificarToken, async (req, res) => {
   try {
     const predioRef = db.collection('predios').doc(req.params.id);
@@ -100,13 +110,22 @@ router.put('/:id', verificarToken, async (req, res) => {
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
     
+    const predioActual = doc.data();
+    
+    // Verificar que el predio pertenezca al usuario actual
+    if (predioActual.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este predio' });
+    }
+    
     const predioData = {
       nombre: req.body.nombre,
       ubicacion: req.body.ubicacion,
       rol: req.body.rol || '',
       superficie: req.body.superficie || null,
       descripcion: req.body.descripcion || '',
-      fechaActualizacion: new Date()
+      fechaActualizacion: new Date(),
+      // Mantener el id_user original
+      id_user: req.usuario.uid
     };
     
     await predioRef.update(predioData);
@@ -121,7 +140,7 @@ router.put('/:id', verificarToken, async (req, res) => {
   }
 });
 
-// Eliminar un predio
+// Eliminar un predio (verificando que pertenezca al usuario)
 router.delete('/:id', verificarToken, async (req, res) => {
   try {
     const predioRef = db.collection('predios').doc(req.params.id);
@@ -129,6 +148,13 @@ router.delete('/:id', verificarToken, async (req, res) => {
     
     if (!doc.exists) {
       return res.status(404).json({ error: 'Predio no encontrado' });
+    }
+    
+    const predioData = doc.data();
+    
+    // Verificar que el predio pertenezca al usuario actual
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar este predio' });
     }
     
     await predioRef.delete();

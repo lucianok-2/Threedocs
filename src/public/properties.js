@@ -32,7 +32,19 @@ function loadProperties() {
   
   propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando predios...</p>';
   
-  db.collection('predios').get()
+  // Obtener el usuario actual
+  const user = firebase.auth().currentUser;
+  
+  if (!user) {
+    console.error('No hay usuario autenticado');
+    propertyList.innerHTML = '<p class="text-red-500 text-center py-4">Error: No hay usuario autenticado</p>';
+    return;
+  }
+  
+  // Filtrar predios por id_user
+  db.collection('predios')
+    .where('id_user', '==', user.uid)
+    .get()
     .then(snapshot => {
       if (snapshot.empty) {
         propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay predios registrados</p>';
@@ -489,6 +501,15 @@ function guardarNuevoPredio(e) {
   e.preventDefault();
   console.log('Guardando nuevo predio');
   
+  // Obtener el usuario actual
+  const user = firebase.auth().currentUser;
+  
+  if (!user) {
+    console.error('No hay usuario autenticado');
+    alert('Error: No hay usuario autenticado');
+    return;
+  }
+  
   // Recopilar datos del formulario
   const propertyData = {
     nombre: document.getElementById('property-name').value,
@@ -498,7 +519,9 @@ function guardarNuevoPredio(e) {
     descripcion: document.getElementById('property-description')?.value || '',
     certificacionFSC: document.getElementById('no-fsc').checked ? null : document.getElementById('fsc-certification').value,
     certificacionPEFC: document.getElementById('no-pefc').checked ? null : document.getElementById('pefc-certification').value,
-    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp(),
+    // Agregar el ID del usuario actual
+    id_user: user.uid
   };
   
   console.log('Datos del predio:', propertyData);
@@ -818,31 +841,26 @@ function validateRUT(input) {
 function saveProperty(event) {
   event.preventDefault();
   
-  // Obtener los valores del formulario
-  const nombre = document.getElementById('property-name').value;
-  const rol = document.getElementById('property-rol').value;
-  const ubicacion = document.getElementById('property-location').value;
-  const superficie = document.getElementById('property-area').value;
-  const descripcion = document.getElementById('property-description').value;
-  
-  // Validar campos requeridos
-  if (!nombre || !rol || !ubicacion) {
-    alert('Por favor complete todos los campos requeridos');
+  // Obtener el token de autenticación
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
     return;
   }
   
-  // Referencia a la base de datos
-  const db = firebase.firestore();
+  // Obtener los valores del formulario
+  const propertyName = document.getElementById('property-name').value;
+  const propertyRol = document.getElementById('property-rol').value;
+  const propertyLocation = document.getElementById('property-location').value;
+  const propertyArea = document.getElementById('property-area').value;
+  const propertyDescription = document.getElementById('property-description').value;
   
-  // Crear objeto con los datos del predio
-  const predioData = {
-    nombre: nombre,
-    rol: rol,
-    ubicacion: ubicacion,
-    superficie: superficie ? parseFloat(superficie) : null,
-    descripcion: descripcion,
-    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-  };
+  // Validar campos requeridos
+  if (!propertyName || !propertyRol || !propertyLocation) {
+    alert('Por favor complete todos los campos requeridos');
+    return;
+  }
   
   // Mostrar indicador de carga
   const submitButton = document.querySelector('#add-property-form button[type="submit"]');
@@ -850,29 +868,51 @@ function saveProperty(event) {
   submitButton.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...';
   submitButton.disabled = true;
   
-  // Guardar en Firestore
-  db.collection('predios').add(predioData)
-    .then(docRef => {
-      console.log('Predio guardado con ID:', docRef.id);
-      
-      // Cerrar el modal
-      closeAddPropertyModal();
-      
-      // Recargar la lista de predios
-      loadProperties();
-      
-      // Mostrar mensaje de éxito
-      alert('Predio guardado exitosamente');
-    })
-    .catch(error => {
-      console.error('Error al guardar predio:', error);
-      alert('Error al guardar el predio: ' + error.message);
-    })
-    .finally(() => {
-      // Restaurar el botón
-      submitButton.innerHTML = originalText;
-      submitButton.disabled = false;
-    });
+  // Crear el objeto de datos del predio
+  const propertyData = {
+    nombre: propertyName,
+    rol: propertyRol,
+    ubicacion: propertyLocation,
+    superficie: propertyArea ? parseFloat(propertyArea) : null,
+    descripcion: propertyDescription
+  };
+  
+  // Enviar los datos al servidor
+  fetch('/api/predios', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(propertyData)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al guardar el predio');
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log('Predio guardado con ID:', data.id);
+    
+    // Cerrar el modal
+    closeAddPropertyModal();
+    
+    // Recargar la lista de predios
+    loadProperties();
+    
+    // Mostrar mensaje de éxito
+    alert('Predio guardado exitosamente');
+  })
+  .catch(error => {
+    console.error('Error al guardar predio:', error);
+    alert('Error al guardar el predio: ' + error.message);
+  })
+  .finally(() => {
+    // Restaurar el botón
+    submitButton.innerHTML = originalText;
+    submitButton.disabled = false;
+  });
 }
 
 function closeAddPropertyModal() {
@@ -955,57 +995,79 @@ function validateRUT(input) {
 }
 
 // Función para guardar el predio
-function saveProperty(e) {
-  e.preventDefault();
+function saveProperty(event) {
+  event.preventDefault();
   
-  // Validar RUTs
-  const propietarioRut = document.getElementById('propietario-rut');
-  const intermediarioRut = document.getElementById('intermediario-rut');
-  
-  if (!validateRUT(propietarioRut)) {
+  // Obtener el token de autenticación
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
     return;
   }
   
-  const purchaseModel = document.getElementById('purchase-model').value;
-  if (purchaseModel === 'intermediario' && !validateRUT(intermediarioRut)) {
+  // Obtener los valores del formulario
+  const propertyName = document.getElementById('property-name').value;
+  const propertyRol = document.getElementById('property-rol').value;
+  const propertyLocation = document.getElementById('property-location').value;
+  const propertyArea = document.getElementById('property-area').value;
+  const propertyDescription = document.getElementById('property-description').value;
+  
+  // Validar campos requeridos
+  if (!propertyName || !propertyRol || !propertyLocation) {
+    alert('Por favor complete todos los campos requeridos');
     return;
   }
   
-  // Recopilar datos del formulario
+  // Mostrar indicador de carga
+  const submitButton = document.querySelector('#add-property-form button[type="submit"]');
+  const originalText = submitButton.innerHTML;
+  submitButton.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...';
+  submitButton.disabled = true;
+  
+  // Crear el objeto de datos del predio
   const propertyData = {
-    nombre: document.getElementById('property-name').value,
-    rol: document.getElementById('property-rol').value,
-    ubicacion: document.getElementById('property-location').value,
-    superficie: document.getElementById('property-area').value || null,
-    descripcion: document.getElementById('property-description').value || '',
-    certificacionFSC: document.getElementById('no-fsc').checked ? null : document.getElementById('fsc-certification').value,
-    certificacionPEFC: document.getElementById('no-pefc').checked ? null : document.getElementById('pefc-certification').value,
-    modeloCompra: document.getElementById('purchase-model').value,
-    compraDirecta: document.getElementById('compra-directa').value || null,
-    facturaPropietario: document.getElementById('factura-propietario').value || null,
-    facturaIntermediario: purchaseModel === 'intermediario' ? document.getElementById('factura-intermediario').value || null : null,
-    propietario: {
-      rut: propietarioRut.value,
-      nombre: document.getElementById('propietario-nombre').value,
-      planManejo: document.getElementById('no-plan-manejo').checked ? null : document.getElementById('plan-manejo').value
-    },
-    intermediario: purchaseModel === 'intermediario' ? {
-      rut: intermediarioRut.value,
-      nombre: document.getElementById('intermediario-nombre').value
-    } : null,
-    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+    nombre: propertyName,
+    rol: propertyRol,
+    ubicacion: propertyLocation,
+    superficie: propertyArea ? parseFloat(propertyArea) : null,
+    descripcion: propertyDescription
   };
   
-  // Guardar en Firestore
-  const db = firebase.firestore();
-  
-  db.collection('predios').add(propertyData)
-    .then(() => {
-      alert('Predio agregado correctamente');
-      closeAddPropertyModal();
-      loadProperties(); // Recargar la lista de predios
-    })
-    .catch(error => {
-      console.error('Error al agregar predio:', error);
-      alert('Error al agregar el predio');
-    });}
+  // Enviar los datos al servidor
+  fetch('/api/predios', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(propertyData)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al guardar el predio');
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log('Predio guardado con ID:', data.id);
+    
+    // Cerrar el modal
+    closeAddPropertyModal();
+    
+    // Recargar la lista de predios
+    loadProperties();
+    
+    // Mostrar mensaje de éxito
+    alert('Predio guardado exitosamente');
+  })
+  .catch(error => {
+    console.error('Error al guardar predio:', error);
+    alert('Error al guardar el predio: ' + error.message);
+  })
+  .finally(() => {
+    // Restaurar el botón
+    submitButton.innerHTML = originalText;
+    submitButton.disabled = false;
+  });
+}
