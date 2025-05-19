@@ -88,6 +88,24 @@ router.post('/', verificarToken, async (req, res) => {
       id_user: req.usuario.uid
     };
     
+    // Añadir información de certificaciones si existe
+    if (req.body.certificaciones && Array.isArray(req.body.certificaciones)) {
+      predioData.certificaciones = req.body.certificaciones;
+    }
+    
+    // Añadir información del propietario si existe
+    if (req.body.propietario) {
+      predioData.propietario = {
+        nombre: req.body.propietario.nombre || '',
+        rut: req.body.propietario.rut || ''
+      };
+    }
+    
+    // Añadir modelo de compra si existe
+    if (req.body.modeloCompra) {
+      predioData.modeloCompra = req.body.modeloCompra;
+    }
+    
     const docRef = await db.collection('predios').add(predioData);
     
     res.status(201).json({
@@ -128,6 +146,24 @@ router.put('/:id', verificarToken, async (req, res) => {
       id_user: req.usuario.uid
     };
     
+    // Actualizar información de certificaciones si existe
+    if (req.body.certificaciones && Array.isArray(req.body.certificaciones)) {
+      predioData.certificaciones = req.body.certificaciones;
+    }
+    
+    // Actualizar información del propietario si existe
+    if (req.body.propietario) {
+      predioData.propietario = {
+        nombre: req.body.propietario.nombre || predioActual.propietario?.nombre || '',
+        rut: req.body.propietario.rut || predioActual.propietario?.rut || ''
+      };
+    }
+    
+    // Actualizar modelo de compra si existe
+    if (req.body.modeloCompra) {
+      predioData.modeloCompra = req.body.modeloCompra;
+    }
+    
     await predioRef.update(predioData);
     
     res.json({
@@ -163,6 +199,46 @@ router.delete('/:id', verificarToken, async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar predio:', error);
     res.status(500).json({ error: 'Error al eliminar predio' });
+  }
+});
+
+// Ruta para obtener los documentos de un predio
+router.get('/:id/documentos', verificarToken, async (req, res) => {
+  try {
+    // Primero verificar que el predio pertenezca al usuario
+    const predioRef = db.collection('predios').doc(req.params.id);
+    const predioDoc = await predioRef.get();
+    
+    if (!predioDoc.exists) {
+      return res.status(404).json({ error: 'Predio no encontrado' });
+    }
+    
+    const predioData = predioDoc.data();
+    
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para acceder a este predio' });
+    }
+    
+    // Obtener los documentos asociados al predio
+    const documentosRef = db.collection('documentos');
+    const snapshot = await documentosRef.where('id_predio', '==', req.params.id).get();
+    
+    if (snapshot.empty) {
+      return res.json([]);
+    }
+    
+    const documentos = [];
+    snapshot.forEach(doc => {
+      documentos.push({
+        _id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    res.json(documentos);
+  } catch (error) {
+    console.error('Error al obtener documentos del predio:', error);
+    res.status(500).json({ error: 'Error al obtener documentos del predio' });
   }
 });
 

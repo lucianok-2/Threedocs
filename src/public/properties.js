@@ -56,7 +56,7 @@ function loadProperties() {
       snapshot.forEach(doc => {
         const data = doc.data();
         propertiesHTML += `
-          <div class="property-item p-3 border-b hover:bg-gray-50 cursor-pointer" data-id="${doc.id}">
+          <div class="property-item p-3 border-b hover:bg-gray-50 cursor-pointer" data-id="${doc.id}" onclick="selectProperty('${doc.id}')">
             <h4 class="font-medium text-gray-800">${data.nombre || 'Predio sin nombre'}</h4>
             <p class="text-sm text-gray-600">${data.ubicacion || 'Sin ubicación'}</p>
           </div>
@@ -65,11 +65,11 @@ function loadProperties() {
       
       propertyList.innerHTML = propertiesHTML;
       
-      // Agregar event listeners a los items de predios
+      // Agregar event listeners a cada elemento de la lista después de insertarlos en el DOM
       const propertyItems = document.querySelectorAll('.property-item');
       propertyItems.forEach(item => {
+        const propertyId = item.getAttribute('data-id');
         item.addEventListener('click', function() {
-          const propertyId = this.getAttribute('data-id');
           selectProperty(propertyId);
         });
       });
@@ -217,6 +217,15 @@ function loadPropertyDetails(propertyId) {
       
       // Cargar documentos del predio
       loadPropertyDocuments(propertyId);
+      
+      // Modificar para añadir el evento de edición
+      document.getElementById('edit-property-btn').addEventListener('click', function() {
+        // Llamar directamente a showEditPropertyModal con los datos del documento
+        showEditPropertyModal({
+          _id: doc.id,
+          ...data
+        });
+      });
     })
     .catch(error => {
       console.error('Error al cargar detalles del predio:', error);
@@ -224,63 +233,31 @@ function loadPropertyDetails(propertyId) {
     });
 }
 
-// Función para mostrar el modal de edición
-function showEditPropertyModal() {
-  const propertyId = localStorage.getItem('selectedPropertyId');
-  if (!propertyId) {
-    alert('No se ha seleccionado ningún predio para editar');
+// Función para mostrar el modal de edición de predio
+function showEditPropertyModal(property) {
+  // Crear el modal si no existe
+  if (!document.getElementById('edit-property-modal')) {
+    console.error('El modal de edición no existe en el DOM');
     return;
   }
   
-  const db = firebase.firestore();
+  // Rellenar el formulario con los datos del predio
+  document.getElementById('edit-property-name').value = property.nombre || '';
+  document.getElementById('edit-property-rol').value = property.rol || '';
+  document.getElementById('edit-purchase-model').value = property.modeloCompra || 'Propietario';
+  document.getElementById('edit-owner-rut').value = property.rutPropietario || '';
+  document.getElementById('edit-owner-name').value = property.nombrePropietario || '';
   
-  // Obtener los datos actuales del predio
-  db.collection('predios').doc(propertyId).get()
-    .then(doc => {
-      if (!doc.exists) {
-        alert('El predio seleccionado no existe');
-        return;
-      }
-      
-      const data = doc.data();
-      
-      // Llenar el formulario con los datos actuales
-      document.getElementById('edit-property-id').value = propertyId;
-      document.getElementById('edit-property-name').value = data.nombre || '';
-      document.getElementById('edit-purchase-model').value = data.modeloCompra || 'Propietario';
-      document.getElementById('edit-property-rol').value = data.rol || '';
-      document.getElementById('edit-owner-rut').value = data.propietario?.rut || '';
-      document.getElementById('edit-owner-name').value = data.propietario?.nombre || '';
-      
-      // Marcar las certificaciones
-      if (data.certificaciones) {
-        document.getElementById('edit-cert-fsc').checked = data.certificaciones.includes('FSC');
-        document.getElementById('edit-cert-pefc').checked = data.certificaciones.includes('PEFC');
-        document.getElementById('edit-cert-none').checked = data.certificaciones.includes('Sin Certificación');
-      }
-      
-      // Mostrar nombres de archivos si existen
-      if (data.documentos?.planManejo) {
-        document.getElementById('plan-manejo-preview').classList.remove('hidden');
-        document.getElementById('plan-manejo-filename').textContent = data.documentos.planManejo.nombre || 'archivo.pdf';
-      } else {
-        document.getElementById('plan-manejo-preview').classList.add('hidden');
-      }
-      
-      if (data.documentos?.facturaCompra) {
-        document.getElementById('factura-preview').classList.remove('hidden');
-        document.getElementById('factura-filename').textContent = data.documentos.facturaCompra.nombre || 'archivo.pdf';
-      } else {
-        document.getElementById('factura-preview').classList.add('hidden');
-      }
-      
-      // Mostrar el modal
-      document.getElementById('edit-property-modal').classList.remove('hidden');
-    })
-    .catch(error => {
-      console.error('Error al cargar datos para edición:', error);
-      alert('Error al cargar los datos del predio');
-    });
+  // Marcar las certificaciones si existen
+  document.getElementById('edit-cert-fsc').checked = property.certificaciones && property.certificaciones.includes('FSC');
+  document.getElementById('edit-cert-pefc').checked = property.certificaciones && property.certificaciones.includes('PEFC');
+  document.getElementById('edit-cert-none').checked = !property.certificaciones || property.certificaciones.length === 0;
+  
+  // Guardar el ID del predio en el formulario para usarlo al guardar
+  document.getElementById('edit-property-form').dataset.propertyId = property._id;
+  
+  // Mostrar el modal
+  document.getElementById('edit-property-modal').classList.remove('hidden');
 }
 
 // Función para cerrar el modal de edición
@@ -288,87 +265,83 @@ function closeEditPropertyModal() {
   document.getElementById('edit-property-modal').classList.add('hidden');
 }
 
-// Función para actualizar el predio
-function updateProperty(event) {
+// Función para guardar los cambios del predio
+function saveEditedProperty(event) {
   event.preventDefault();
   
-  const propertyId = document.getElementById('edit-property-id').value;
-  const db = firebase.firestore();
-  const storage = firebase.storage();
+  const propertyId = event.target.dataset.propertyId;
+  if (!propertyId) {
+    console.error('No se encontró el ID del predio');
+    return;
+  }
   
-  // Recopilar datos del formulario
-  const propertyData = {
-    nombre: document.getElementById('edit-property-name').value,
-    modeloCompra: document.getElementById('edit-purchase-model').value,
-    rol: document.getElementById('edit-property-rol').value,
-    propietario: {
-      rut: document.getElementById('edit-owner-rut').value,
-      nombre: document.getElementById('edit-owner-name').value
-    },
-    certificaciones: []
-  };
+  // Obtener los valores del formulario
+  const nombre = document.getElementById('edit-property-name').value;
+  const rol = document.getElementById('edit-property-rol').value;
+  const modeloCompra = document.getElementById('edit-purchase-model').value;
+  const rutPropietario = document.getElementById('edit-owner-rut').value;
+  const nombrePropietario = document.getElementById('edit-owner-name').value;
   
-  // Agregar certificaciones seleccionadas
+  // Obtener las certificaciones seleccionadas
+  const certificaciones = [];
   if (document.getElementById('edit-cert-fsc').checked) {
-    propertyData.certificaciones.push('FSC');
+    certificaciones.push('FSC');
   }
   if (document.getElementById('edit-cert-pefc').checked) {
-    propertyData.certificaciones.push('PEFC');
-  }
-  if (document.getElementById('edit-cert-none').checked) {
-    propertyData.certificaciones.push('Sin Certificación');
+    certificaciones.push('PEFC');
   }
   
-  // Iniciar la actualización
-  let updatePromise = Promise.resolve();
-  
-  // Manejar la subida de archivos si se seleccionaron
-  const planManejoFile = document.getElementById('edit-plan-manejo').files[0];
-  const facturaFile = document.getElementById('edit-factura').files[0];
-  
-  if (planManejoFile) {
-    updatePromise = updatePromise.then(() => {
-      const fileRef = storage.ref(`predios/${propertyId}/plan_manejo/${planManejoFile.name}`);
-      return fileRef.put(planManejoFile).then(() => {
-        return fileRef.getDownloadURL().then(url => {
-          if (!propertyData.documentos) propertyData.documentos = {};
-          propertyData.documentos.planManejo = {
-            nombre: planManejoFile.name,
-            url: url,
-            fecha: new Date()
-          };
-        });
-      });
-    });
+  // Generar código de certificación si hay certificaciones seleccionadas
+  let codigoCertificacion = null;
+  if (certificaciones.length > 0) {
+    // Generar un código único basado en el nombre del predio y la fecha
+    const fecha = new Date();
+    const codigoBase = nombre.substring(0, 3).toUpperCase();
+    codigoCertificacion = `${codigoBase}-${fecha.getFullYear()}${(fecha.getMonth()+1).toString().padStart(2, '0')}${fecha.getDate().toString().padStart(2, '0')}`;
   }
   
-  if (facturaFile) {
-    updatePromise = updatePromise.then(() => {
-      const fileRef = storage.ref(`predios/${propertyId}/factura_compra/${facturaFile.name}`);
-      return fileRef.put(facturaFile).then(() => {
-        return fileRef.getDownloadURL().then(url => {
-          if (!propertyData.documentos) propertyData.documentos = {};
-          propertyData.documentos.facturaCompra = {
-            nombre: facturaFile.name,
-            url: url,
-            fecha: new Date()
-          };
-        });
-      });
-    });
+  // Crear el objeto con los datos actualizados
+  const updatedProperty = {
+    nombre,
+    rol,
+    modeloCompra,
+    rutPropietario,
+    nombrePropietario,
+    certificaciones,
+    codigoCertificacion
+  };
+  
+  // Obtener el token de autenticación
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
   }
   
-  // Actualizar el documento en Firestore
-  updatePromise.then(() => {
-    return db.collection('predios').doc(propertyId).update(propertyData);
+  // Enviar la solicitud para actualizar el predio
+  fetch(`/api/predios/${propertyId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(updatedProperty)
   })
-  .then(() => {
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al actualizar el predio');
+    }
+    return response.json();
+  })
+  .then(data => {
     alert('Predio actualizado correctamente');
     closeEditPropertyModal();
-    loadPropertyDetails(propertyId); // Recargar los detalles
+    loadProperties(); // Recargar la lista de predios
+    loadPropertyDetails(propertyId); // Recargar los detalles del predio
   })
   .catch(error => {
-    console.error('Error al actualizar el predio:', error);
+    console.error('Error:', error);
     alert('Error al actualizar el predio');
   });
 }
@@ -469,6 +442,56 @@ document.addEventListener('DOMContentLoaded', function() {
         showAddPropertyForm();
       });
     }
+  }
+  
+  // Event listeners para el modal de edición
+  const closeEditModalBtn = document.getElementById('close-edit-modal');
+  if (closeEditModalBtn) {
+    closeEditModalBtn.addEventListener('click', closeEditPropertyModal);
+  }
+  
+  const cancelEditBtn = document.getElementById('cancel-edit-property');
+  if (cancelEditBtn) {
+    cancelEditBtn.addEventListener('click', closeEditPropertyModal);
+  }
+  
+  const editPropertyForm = document.getElementById('edit-property-form');
+  if (editPropertyForm) {
+    editPropertyForm.addEventListener('submit', saveEditedProperty);
+  }
+  
+  // Configurar el comportamiento de los checkboxes de certificación
+  const certNoneCheckbox = document.getElementById('edit-cert-none');
+  if (certNoneCheckbox) {
+    certNoneCheckbox.addEventListener('change', function() {
+      if (this.checked) {
+        document.getElementById('edit-cert-fsc').checked = false;
+        document.getElementById('edit-cert-pefc').checked = false;
+      }
+    });
+  }
+  
+  const certFscCheckbox = document.getElementById('edit-cert-fsc');
+  const certPefcCheckbox = document.getElementById('edit-cert-pefc');
+  
+  if (certFscCheckbox && certPefcCheckbox) {
+    certFscCheckbox.addEventListener('change', function() {
+      if (this.checked) {
+        document.getElementById('edit-cert-none').checked = false;
+      }
+    });
+    
+    certPefcCheckbox.addEventListener('change', function() {
+      if (this.checked) {
+        document.getElementById('edit-cert-none').checked = false;
+      }
+    });
+  }
+  
+  // Corregir el botón "Nuevo Predio"
+  const addPropertyBtn = document.getElementById('add-property-btn');
+  if (addPropertyBtn) {
+    addPropertyBtn.addEventListener('click', showAddPropertyForm);
   }
 });
 
