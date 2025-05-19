@@ -1,4 +1,343 @@
-// ... existing code ...
+function toggleIntermediarySection(modalType) {
+  const purchaseModel = document.getElementById(`${modalType}-purchase-model`);
+  const intermediarySection = document.getElementById(`${modalType}-intermediary-section`);
+  
+  // Verificar que los elementos existan antes de intentar acceder a ellos
+  if (purchaseModel && intermediarySection) {
+    if (purchaseModel.value === 'Intermediario') {
+      intermediarySection.classList.remove('hidden');
+      // Hacer campos de intermediario requeridos
+      const requiredFields = intermediarySection.querySelectorAll('input[name="nombreIntermediario"], input[name="rutIntermediario"]');
+      requiredFields.forEach(field => field.setAttribute('required', ''));
+    } else {
+      intermediarySection.classList.add('hidden');
+      // Quitar required de los campos de intermediario
+      const fields = intermediarySection.querySelectorAll('input');
+      fields.forEach(field => field.removeAttribute('required'));
+    }
+  }
+}
+
+// Función para cargar detalles del predio
+function loadPropertyDetails(propertyId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  // Mostrar secciones de detalles
+  document.getElementById('property-details').classList.remove('hidden');
+  document.getElementById('property-documents').classList.remove('hidden');
+  
+  // Mostrar mensaje de carga
+  document.getElementById('property-info').innerHTML = '<p class="text-gray-500 text-center py-4">Cargando detalles del predio...</p>';
+  
+  fetch(`/api/predios/${propertyId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al cargar los detalles del predio');
+    }
+    return response.json();
+  })
+  .then(property => {
+    // Rellenar información del predio
+    const propertyInfo = document.getElementById('property-info');
+    propertyInfo.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-sm text-gray-500">Nombre del Predio</p>
+          <p class="font-medium">${property.nombre}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">Rol</p>
+          <p class="font-medium">${property.rol || 'No especificado'}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">Modelo de Compra</p>
+          <p class="font-medium">${property.modeloCompra || 'Propietario'}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">RUT Propietario</p>
+          <p class="font-medium">${property.rutPropietario || 'No especificado'}</p>
+        </div>
+      </div>
+    `;
+    
+    // Actualizar los botones con el ID del predio
+    const editBtn = document.getElementById('edit-property-btn');
+    if (editBtn) {
+      editBtn.dataset.propertyId = propertyId;
+    }
+    
+    const deleteBtn = document.getElementById('delete-property-btn');
+    if (deleteBtn) {
+      deleteBtn.dataset.propertyId = propertyId;
+    }
+    
+    // Cargar documentos del predio
+    try {
+      loadPropertyDocuments(propertyId);
+    } catch (error) {
+      console.error('Error al cargar documentos:', error);
+      const documentList = document.getElementById('document-list');
+      if (documentList) {
+        documentList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los documentos</p>';
+      }
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    document.getElementById('property-info').innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los detalles del predio</p>';
+  });
+}
+
+// Función para cargar la lista de predios
+function loadProperties() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  // Mostrar mensaje de carga
+  const propertyList = document.getElementById('property-list');
+  if (propertyList) {
+    propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando predios...</p>';
+  }
+  
+  fetch('/api/predios', {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al cargar los predios');
+    }
+    return response.json();
+  })
+  .then(properties => {
+    if (propertyList) {
+      if (properties.length === 0) {
+        propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay predios registrados</p>';
+      } else {
+        propertyList.innerHTML = '';
+        properties.forEach(property => {
+          const propertyItem = document.createElement('div');
+          propertyItem.className = 'border-b last:border-b-0 py-3 px-4 hover:bg-gray-50 cursor-pointer';
+          propertyItem.dataset.propertyId = property._id;
+          propertyItem.innerHTML = `
+            <h4 class="font-medium text-gray-800">${property.nombre}</h4>
+            <p class="text-sm text-gray-500">Rol: ${property.rol || 'No especificado'}</p>
+          `;
+          
+          // Añadir evento para mostrar detalles al hacer clic
+          propertyItem.addEventListener('click', function() {
+            const propertyId = this.dataset.propertyId;
+            loadPropertyDetails(propertyId);
+          });
+          
+          propertyList.appendChild(propertyItem);
+        });
+      }
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    if (propertyList) {
+      propertyList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los predios</p>';
+    }
+  });
+}
+
+// Inicializar eventos cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+  // Cargar lista de predios
+  loadProperties();
+  
+  // Configurar botón de añadir predio
+  const addPropertyBtn = document.getElementById('add-property-btn');
+  if (addPropertyBtn) {
+    addPropertyBtn.addEventListener('click', function() {
+      showAddPropertyModal();
+    });
+  }
+  
+  // Configurar botón de cerrar modal
+  const closeAddModalBtn = document.getElementById('close-add-modal');
+  if (closeAddModalBtn) {
+    closeAddModalBtn.addEventListener('click', closeAddPropertyModal);
+  }
+  
+  // Configurar botones de editar y eliminar predio
+  const editPropertyBtn = document.getElementById('edit-property-btn');
+  if (editPropertyBtn) {
+    editPropertyBtn.addEventListener('click', function() {
+      const propertyId = this.dataset.propertyId;
+      if (propertyId) {
+        editProperty(propertyId);
+      } else {
+        alert('No se ha seleccionado un predio para editar');
+      }
+    });
+  }
+  
+  const deletePropertyBtn = document.getElementById('delete-property-btn');
+  if (deletePropertyBtn) {
+    deletePropertyBtn.addEventListener('click', function() {
+      const propertyId = this.dataset.propertyId;
+      if (propertyId) {
+        if (confirm('¿Está seguro de que desea eliminar este predio?')) {
+          deleteProperty(propertyId);
+        }
+      } else {
+        alert('No se ha seleccionado un predio para eliminar');
+      }
+    });
+  }
+  
+  // Configurar cambio en modelo de compra para mostrar/ocultar sección de intermediario
+  const addPurchaseModel = document.getElementById('add-purchase-model');
+  if (addPurchaseModel) {
+    addPurchaseModel.addEventListener('change', function() {
+      toggleIntermediarySection('add');
+    });
+    
+    // Inicializar estado de sección de intermediario
+    toggleIntermediarySection('add');
+  }
+});
+
+// Función para mostrar el modal de añadir predio
+function showAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    
+    // Limpiar el formulario
+    const form = document.getElementById('add-property-form');
+    if (form) {
+      form.reset();
+    }
+  } else {
+    console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para cerrar el modal de añadir predio
+function closeAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  } else {
+    console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para editar un predio
+function editProperty(propertyId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  // Obtener los detalles del predio para llenar el formulario
+  fetch(`/api/predios/${propertyId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al cargar los detalles del predio');
+    }
+    return response.json();
+  })
+  .then(property => {
+    // Mostrar el modal de editar predio
+    const modal = document.getElementById('edit-property-modal');
+    if (modal) {
+      // Llenar el formulario con los datos del predio
+      document.getElementById('edit-property-name').value = property.nombre || '';
+      document.getElementById('edit-property-rol').value = property.rol || '';
+      document.getElementById('edit-purchase-model').value = property.modeloCompra || 'Propietario';
+      document.getElementById('edit-owner-rut').value = property.rutPropietario || '';
+      document.getElementById('edit-owner-name').value = property.nombrePropietario || '';
+      
+      // Si tiene intermediario, llenar esos campos también
+      if (property.modeloCompra === 'Intermediario' && property.intermediario) {
+        document.getElementById('edit-intermediary-name').value = property.intermediario.nombre || '';
+        document.getElementById('edit-intermediary-rut').value = property.intermediario.rut || '';
+        document.getElementById('edit-intermediary-phone').value = property.intermediario.telefono || '';
+        document.getElementById('edit-intermediary-email').value = property.intermediario.email || '';
+      }
+      
+      // Actualizar la visibilidad de la sección de intermediario
+      toggleIntermediarySection('edit');
+      
+      // Guardar el ID del predio en el formulario
+      const form = document.getElementById('edit-property-form');
+      if (form) {
+        form.dataset.propertyId = propertyId;
+      }
+      
+      // Mostrar el modal
+      modal.classList.remove('hidden');
+    } else {
+      alert('No se encontró el modal de editar predio');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error al cargar los detalles del predio para editar');
+  });
+}
+
+// Función para eliminar un predio
+function deleteProperty(propertyId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  fetch(`/api/predios/${propertyId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al eliminar el predio');
+    }
+    return response.json();
+  })
+  .then(data => {
+    alert('Predio eliminado correctamente');
+    
+    // Ocultar las secciones de detalles
+    document.getElementById('property-details').classList.add('hidden');
+    document.getElementById('property-documents').classList.add('hidden');
+    
+    // Recargar la lista de predios
+    loadProperties();
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error al eliminar el predio');
+  });
+}
 
 // Función para cargar los documentos de un predio
 function loadPropertyDocuments(propertyId) {
@@ -98,296 +437,6 @@ function deleteDocument(propertyId, documentId) {
   });
 }
 
-// Función para mostrar el modal de añadir propiedad
-function showAddPropertyModal() {
-  const modal = document.getElementById('add-property-modal');
-  if (modal) {
-    modal.classList.remove('hidden');
-    
-    // Limpiar el formulario
-    const form = document.getElementById('add-property-form');
-    if (form) {
-      form.reset();
-    }
-    
-    // Configurar los botones
-    setupAddModalButtons();
-  }
-}
-
-// Cargar la funcionalidad de la barra lateral cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', function() {
-  if (typeof setupSidebar === 'function') {
-    setupSidebar();
-  } else {
-    console.error('La función setupSidebar no está disponible');
-  }
-  
-  // Configurar el botón para añadir nuevo predio
-  const addPropertyBtn = document.getElementById('add-property-btn');
-  
-  if (addPropertyBtn) {
-    addPropertyBtn.addEventListener('click', function() {
-      // Mostrar el formulario de añadir predio
-      showAddPropertyForm();
-    });
-  }
- 
-  
-  const propertyForm = document.getElementById('property-form');
-  if (propertyForm) {
-    propertyForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      // Obtener los datos del formulario
-      const formData = new FormData(propertyForm);
-      const propertyData = {
-        nombre: formData.get('nombre'),
-        ubicacion: formData.get('ubicacion'),
-        superficie: formData.get('superficie'),
-        propietario: formData.get('propietario'),
-        descripcion: formData.get('descripcion')
-      };
-      
-      // Obtener el token de autenticación
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-        window.location.href = '/';
-        return;
-      }
-      
-      // Determinar si es una adición o una actualización
-      const isAdd = propertyForm.dataset.mode === 'add';
-      const url = isAdd ? '/api/predios' : `/api/predios/${propertyForm.dataset.id}`;
-      const method = isAdd ? 'POST' : 'PUT';
-      
-      // Enviar la solicitud a la API
-      fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(propertyData)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Error al guardar el predio');
-        }
-        return response.json();
-      })
-      .then(data => {
-        alert(isAdd ? 'Predio añadido correctamente' : 'Predio actualizado correctamente');
-        // Ocultar el formulario y actualizar la lista de predios
-        document.getElementById('property-form-container').classList.add('hidden');
-        loadProperties(); // Función para cargar los predios desde la API
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Error al guardar el predio');
-      });
-    });
-  }
-});
-
-// Función para cargar los predios desde la API
-function loadProperties() {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-    window.location.href = '/';
-    return;
-  }
-  
-  const propertyList = document.getElementById('property-list');
-  if (propertyList) {
-    propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando predios...</p>';
-    
-    fetch('/api/predios', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Error al cargar los predios');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.length === 0) {
-        propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay predios disponibles</p>';
-      } else {
-        propertyList.innerHTML = '';
-        data.forEach(property => {
-          const propertyItem = document.createElement('div');
-          propertyItem.className = 'py-2 px-3 hover:bg-gray-100 cursor-pointer rounded';
-          propertyItem.innerHTML = `
-            <div class="font-medium">${property.nombre}</div>
-            <div class="text-sm text-gray-600">${property.ubicacion}</div>
-          `;
-          propertyItem.addEventListener('click', function() {
-            loadPropertyDetails(property._id);
-          });
-          propertyList.appendChild(propertyItem);
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      propertyList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los predios</p>';
-    });
-  }
-}
-
-// Cargar los predios al iniciar la página
-document.addEventListener('DOMContentLoaded', loadProperties);
-
-// Función para mostrar el formulario de añadir predio
-function showAddPropertyForm() {
-  // Usar la función del archivo de modales
-  if (window.modalHelpers && window.modalHelpers.showAddPropertyModal) {
-    window.modalHelpers.showAddPropertyModal();
-    
-    // Configurar los botones
-    setupAddModalButtons();
-  } else {
-    console.error('Las funciones de modales no están disponibles');
-    
-    // Fallback al código original si las funciones no están disponibles
-    const modal = document.getElementById('add-property-modal');
-    if (modal) {
-      modal.classList.remove('hidden');
-      
-      // Limpiar el formulario
-      const form = document.getElementById('add-property-form');
-      if (form) {
-        form.reset();
-      }
-      
-      // Configurar los botones
-      setupAddModalButtons();
-    }
-  }
-}
-
-// Configurar los botones del modal de añadir predio
-function setupAddModalButtons() {
-  // Botón para cerrar el modal
-  const closeBtn = document.getElementById('close-add-modal');
-  if (closeBtn) {
-    // Eliminar event listeners anteriores
-    const newCloseBtn = closeBtn.cloneNode(true);
-    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-    
-    // Agregar nuevo event listener
-    newCloseBtn.addEventListener('click', function() {
-      if (window.modalHelpers && window.modalHelpers.closeAddPropertyModal) {
-        window.modalHelpers.closeAddPropertyModal();
-      } else {
-        document.getElementById('add-property-modal').classList.add('hidden');
-      }
-    });
-  }
-  
-  // Botón para cancelar
-  const cancelBtn = document.getElementById('cancel-add-property');
-  if (cancelBtn) {
-    // Eliminar event listeners anteriores
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
-    // Agregar nuevo event listener
-    newCancelBtn.addEventListener('click', function() {
-      if (window.modalHelpers && window.modalHelpers.closeAddPropertyModal) {
-        window.modalHelpers.closeAddPropertyModal();
-      } else {
-        document.getElementById('add-property-modal').classList.add('hidden');
-      }
-    });
-  }
-  
-  // Configurar el formulario
-  const addForm = document.getElementById('add-property-form');
-  if (addForm) {
-    // Eliminar event listeners anteriores
-    const newAddForm = addForm.cloneNode(true);
-    addForm.parentNode.replaceChild(newAddForm, addForm);
-    
-    // Agregar nuevo event listener
-    newAddForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      // Obtener los datos del formulario
-      const formData = new FormData(this);
-      const propertyData = {
-        nombre: formData.get('nombre'),
-        rol: formData.get('rol'),
-        ubicacion: formData.get('ubicacion'),
-        superficie: formData.get('superficie'),
-        propietario: {
-          nombre: formData.get('propietario')
-        }
-      };
-      
-      // Guardar el predio en Firestore
-      const db = firebase.firestore();
-      
-      // Obtener el usuario actual
-      const user = firebase.auth().currentUser;
-      
-      if (!user) {
-        alert('No hay usuario autenticado');
-        return;
-      }
-      
-      // Añadir el ID del usuario al predio
-      propertyData.id_user = user.uid;
-      
-      // Guardar en Firestore
-      db.collection('predios').add(propertyData)
-        .then(() => {
-          alert('Predio añadido correctamente');
-          document.getElementById('add-property-modal').classList.add('hidden');
-          loadProperties(); // Recargar la lista de predios
-        })
-        .catch(error => {
-          console.error('Error al añadir predio:', error);
-          alert('Error al añadir el predio: ' + error.message);
-        });
-    });
-  }
-}
-
-// Función para mostrar el modal de añadir predio
-function showAddPropertyModal() {
-  document.getElementById('add-property-modal').classList.remove('hidden');
-}
-
-// Función para cerrar el modal de añadir predio
-function closeAddPropertyModal() {
-  document.getElementById('add-property-modal').classList.add('hidden');
-}
-
-// Función para mostrar/ocultar sección de intermediario según el modelo de compra
-function toggleIntermediarySection(modalType) {
-  const purchaseModel = document.getElementById(`${modalType}-purchase-model`).value;
-  const intermediarySection = document.getElementById(`${modalType}-intermediary-section`);
-  
-  if (purchaseModel === 'Intermediario') {
-    intermediarySection.classList.remove('hidden');
-    // Hacer campos de intermediario requeridos
-    const requiredFields = intermediarySection.querySelectorAll('input[name="nombreIntermediario"], input[name="rutIntermediario"]');
-    requiredFields.forEach(field => field.setAttribute('required', ''));
-  } else {
-    intermediarySection.classList.add('hidden');
-    // Quitar required de los campos de intermediario
-    const fields = intermediarySection.querySelectorAll('input');
-    fields.forEach(field => field.removeAttribute('required'));
-  }
-}
-
 // Función para cargar detalles del predio
 function loadPropertyDetails(propertyId) {
   const token = localStorage.getItem('token');
@@ -439,12 +488,91 @@ function loadPropertyDetails(propertyId) {
       </div>
     `;
     
+    // Actualizar los botones con el ID del predio
+    const editBtn = document.getElementById('edit-property-btn');
+    if (editBtn) {
+      editBtn.dataset.propertyId = propertyId;
+    }
+    
+    const deleteBtn = document.getElementById('delete-property-btn');
+    if (deleteBtn) {
+      deleteBtn.dataset.propertyId = propertyId;
+    }
+    
     // Cargar documentos del predio
-    loadPropertyDocuments(propertyId);
+    try {
+      loadPropertyDocuments(propertyId);
+    } catch (error) {
+      console.error('Error al cargar documentos:', error);
+      const documentList = document.getElementById('document-list');
+      if (documentList) {
+        documentList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los documentos</p>';
+      }
+    }
   })
   .catch(error => {
     console.error('Error:', error);
     document.getElementById('property-info').innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los detalles del predio</p>';
+  });
+}
+
+// Función para cargar la lista de predios
+function loadProperties() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  // Mostrar mensaje de carga
+  const propertyList = document.getElementById('property-list');
+  if (propertyList) {
+    propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando predios...</p>';
+  }
+  
+  fetch('/api/predios', {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al cargar los predios');
+    }
+    return response.json();
+  })
+  .then(properties => {
+    if (propertyList) {
+      if (properties.length === 0) {
+        propertyList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay predios registrados</p>';
+      } else {
+        propertyList.innerHTML = '';
+        properties.forEach(property => {
+          const propertyItem = document.createElement('div');
+          propertyItem.className = 'border-b last:border-b-0 py-3 px-4 hover:bg-gray-50 cursor-pointer';
+          propertyItem.dataset.propertyId = property._id;
+          propertyItem.innerHTML = `
+            <h4 class="font-medium text-gray-800">${property.nombre}</h4>
+            <p class="text-sm text-gray-500">Rol: ${property.rol || 'No especificado'}</p>
+          `;
+          
+          // Añadir evento para mostrar detalles al hacer clic
+          propertyItem.addEventListener('click', function() {
+            const propertyId = this.dataset.propertyId;
+            loadPropertyDetails(propertyId);
+          });
+          
+          propertyList.appendChild(propertyItem);
+        });
+      }
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    if (propertyList) {
+      propertyList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los predios</p>';
+    }
   });
 }
 
@@ -456,7 +584,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Configurar botón de añadir predio
   const addPropertyBtn = document.getElementById('add-property-btn');
   if (addPropertyBtn) {
-    addPropertyBtn.addEventListener('click', showAddPropertyModal);
+    addPropertyBtn.addEventListener('click', function() {
+      showAddPropertyModal();
+    });
   }
   
   // Configurar botón de cerrar modal
@@ -465,23 +595,165 @@ document.addEventListener('DOMContentLoaded', function() {
     closeAddModalBtn.addEventListener('click', closeAddPropertyModal);
   }
   
+  // Configurar botones de editar y eliminar predio
+  const editPropertyBtn = document.getElementById('edit-property-btn');
+  if (editPropertyBtn) {
+    editPropertyBtn.addEventListener('click', function() {
+      const propertyId = this.dataset.propertyId;
+      if (propertyId) {
+        editProperty(propertyId);
+      } else {
+        alert('No se ha seleccionado un predio para editar');
+      }
+    });
+  }
+  
+  const deletePropertyBtn = document.getElementById('delete-property-btn');
+  if (deletePropertyBtn) {
+    deletePropertyBtn.addEventListener('click', function() {
+      const propertyId = this.dataset.propertyId;
+      if (propertyId) {
+        if (confirm('¿Está seguro de que desea eliminar este predio?')) {
+          deleteProperty(propertyId);
+        }
+      } else {
+        alert('No se ha seleccionado un predio para eliminar');
+      }
+    });
+  }
+  
   // Configurar cambio en modelo de compra para mostrar/ocultar sección de intermediario
   const addPurchaseModel = document.getElementById('add-purchase-model');
   if (addPurchaseModel) {
-    addPurchaseModel.addEventListener('change', () => toggleIntermediarySection('add'));
-  }
-  
-  const editPurchaseModel = document.getElementById('edit-purchase-model');
-  if (editPurchaseModel) {
-    editPurchaseModel.addEventListener('change', () => toggleIntermediarySection('edit'));
-  }
-  
-  // Inicializar estado de secciones de intermediario
-  if (addPurchaseModel) {
+    addPurchaseModel.addEventListener('change', function() {
+      toggleIntermediarySection('add');
+    });
+    
+    // Inicializar estado de sección de intermediario
     toggleIntermediarySection('add');
   }
-  
-  if (editPurchaseModel) {
-    toggleIntermediarySection('edit');
-  }
 });
+
+// Función para mostrar el modal de añadir predio
+function showAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    
+    // Limpiar el formulario
+    const form = document.getElementById('add-property-form');
+    if (form) {
+      form.reset();
+    }
+  } else {
+    console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para cerrar el modal de añadir predio
+function closeAddPropertyModal() {
+  const modal = document.getElementById('add-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  } else {
+    console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para editar un predio
+function editProperty(propertyId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  // Obtener los detalles del predio para llenar el formulario
+  fetch(`/api/predios/${propertyId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al cargar los detalles del predio');
+    }
+    return response.json();
+  })
+  .then(property => {
+    // Mostrar el modal de editar predio
+    const modal = document.getElementById('edit-property-modal');
+    if (modal) {
+      // Llenar el formulario con los datos del predio
+      document.getElementById('edit-property-name').value = property.nombre || '';
+      document.getElementById('edit-property-rol').value = property.rol || '';
+      document.getElementById('edit-purchase-model').value = property.modeloCompra || 'Propietario';
+      document.getElementById('edit-owner-rut').value = property.rutPropietario || '';
+      document.getElementById('edit-owner-name').value = property.nombrePropietario || '';
+      
+      // Si tiene intermediario, llenar esos campos también
+      if (property.modeloCompra === 'Intermediario' && property.intermediario) {
+        document.getElementById('edit-intermediary-name').value = property.intermediario.nombre || '';
+        document.getElementById('edit-intermediary-rut').value = property.intermediario.rut || '';
+        document.getElementById('edit-intermediary-phone').value = property.intermediario.telefono || '';
+        document.getElementById('edit-intermediary-email').value = property.intermediario.email || '';
+      }
+      
+      // Actualizar la visibilidad de la sección de intermediario
+      toggleIntermediarySection('edit');
+      
+      // Guardar el ID del predio en el formulario
+      const form = document.getElementById('edit-property-form');
+      if (form) {
+        form.dataset.propertyId = propertyId;
+      }
+      
+      // Mostrar el modal
+      modal.classList.remove('hidden');
+    } else {
+      alert('No se encontró el modal de editar predio');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error al cargar los detalles del predio para editar');
+  });
+}
+
+// Función para eliminar un predio
+function deleteProperty(propertyId) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
+    window.location.href = '/';
+    return;
+  }
+  
+  fetch(`/api/predios/${propertyId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Error al eliminar el predio');
+    }
+    return response.json();
+  })
+  .then(data => {
+    alert('Predio eliminado correctamente');
+    
+    // Ocultar las secciones de detalles
+    document.getElementById('property-details').classList.add('hidden');
+    document.getElementById('property-documents').classList.add('hidden');
+    
+    // Recargar la lista de predios
+    loadProperties();
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error al eliminar el predio');
+  });
+}
