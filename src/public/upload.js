@@ -127,25 +127,39 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName) {
-    document.getElementById('modal-title').textContent = `Subir Documento: ${typeName}`;
-    document.getElementById('document-type-id').value = typeId;
-    document.getElementById('property-id').value = propertySelect.value;
-    
-    // Limpiar el formulario
-    uploadForm.reset();
-    selectedFileText.classList.add('hidden');
-    selectedFileText.textContent = '';
-    
-    uploadModal.classList.remove('hidden');
+    if (window.modalHelpers && window.modalHelpers.openUploadModal) {
+      // Usar la función del archivo de modales
+      window.modalHelpers.openUploadModal(typeId, typeName, propertySelect.value);
+    } else {
+      // Fallback al código original
+      document.getElementById('modal-title').textContent = `Subir Documento: ${typeName}`;
+      document.getElementById('document-type-id').value = typeId;
+      document.getElementById('property-id').value = propertySelect.value;
+      
+      // Limpiar el formulario
+      uploadForm.reset();
+      selectedFileText.classList.add('hidden');
+      selectedFileText.textContent = '';
+      
+      uploadModal.classList.remove('hidden');
+    }
   }
   
   // Cerrar el modal
   closeModalBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
+    if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
+      window.modalHelpers.closeUploadModal();
+    } else {
+      uploadModal.classList.add('hidden');
+    }
   });
   
   cancelUploadBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
+    if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
+      window.modalHelpers.closeUploadModal();
+    } else {
+      uploadModal.classList.add('hidden');
+    }
   });
   
   // Manejar la selección de archivos
