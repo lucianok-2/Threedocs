@@ -139,6 +139,7 @@ function loadProperties() {
           propertyItem.dataset.propertyId = property._id;
           propertyItem.innerHTML = `
             <h4 class="font-medium text-gray-800">${property.nombre}</h4>
+            <p class="text-sm text-gray-500">ID: ${property.idPredio || 'No especificado'}</p>
             <p class="text-sm text-gray-500">Rol: ${property.rol || 'No especificado'}</p>
           `;
           
@@ -608,21 +609,32 @@ function saveProperty(form) {
   
   // Formato: PRED-AAAAMMDD-HHMMSS
   const idPredio = `PRED-${año}${mes}${dia}-${hora}${minutos}${segundos}`;
+  console.log('ID de predio generado:', idPredio);
   
+  // Obtener valores del formulario
+  const nombre = formData.get('nombre');
+  const rol = formData.get('rol');
+  const modeloCompra = formData.get('modeloCompra');
+  const rutPropietario = formData.get('rutPropietario');
+  const nombrePropietario = formData.get('nombrePropietario');
+  const ubicacion = formData.get('ubicacion') || '';
+  
+  // Crear objeto con los datos principales del predio
   const propertyData = {
     idPredio: idPredio,
-    nombre: formData.get('nombre'),
-    rol: formData.get('rol'),
-    modeloCompra: formData.get('modeloCompra'),
-    rutPropietario: formData.get('rutPropietario'),
-    nombrePropietario: formData.get('nombrePropietario'),
-    ubicacion: formData.get('ubicacion') || '' // Aseguramos que ubicacion tenga un valor por defecto
+    nombre: nombre,
+    rol: rol,
+    modeloCompra: modeloCompra,
+    rutPropietario: rutPropietario,
+    nombrePropietario: nombrePropietario,
+    ubicacion: ubicacion,
+    fechaCreacion: new Date().toISOString()
   };
   
-  console.log('Datos del predio:', propertyData);
+  console.log('Datos del predio a guardar:', propertyData);
   
   // Si el modelo de compra es Intermediario, añadir esos datos
-  if (propertyData.modeloCompra === 'Intermediario') {
+  if (modeloCompra === 'Intermediario') {
     propertyData.intermediario = {
       nombre: formData.get('nombreIntermediario'),
       rut: formData.get('rutIntermediario'),

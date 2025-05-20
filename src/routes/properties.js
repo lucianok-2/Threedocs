@@ -79,10 +79,11 @@ router.post('/', verificarToken, async (req, res) => {
   try {
     const predioData = {
       nombre: req.body.nombre,
-      ubicacion: req.body.ubicacion,
+      ubicacion: req.body.ubicacion || '',
       rol: req.body.rol || '',
       superficie: req.body.superficie || null,
       descripcion: req.body.descripcion || '',
+      idPredio: req.body.idPredio, // Añadir el campo idPredio
       fechaCreacion: new Date(),
       // Guardar automáticamente el ID del usuario
       id_user: req.usuario.uid
@@ -106,6 +107,19 @@ router.post('/', verificarToken, async (req, res) => {
       predioData.modeloCompra = req.body.modeloCompra;
     }
     
+    // Añadir información de rutPropietario y nombrePropietario si existen
+    if (req.body.rutPropietario) {
+      predioData.rutPropietario = req.body.rutPropietario;
+    }
+    
+    if (req.body.nombrePropietario) {
+      predioData.nombrePropietario = req.body.nombrePropietario;
+    }
+    
+    // Añadir información de intermediario si existe
+    if (req.body.intermediario) {
+      predioData.intermediario = req.body.intermediario;
+    }
     const docRef = await db.collection('predios').add(predioData);
     
     res.status(201).json({
@@ -141,6 +155,7 @@ router.put('/:id', verificarToken, async (req, res) => {
       rol: req.body.rol || '',
       superficie: req.body.superficie || null,
       descripcion: req.body.descripcion || '',
+      idPredio: req.body.idPredio || predioActual.idPredio, // Mantener el idPredio existente
       fechaActualizacion: new Date(),
       // Mantener el id_user original
       id_user: req.usuario.uid
