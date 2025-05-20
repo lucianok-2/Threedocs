@@ -51,6 +51,10 @@ function loadPropertyDetails(propertyId) {
     propertyInfo.innerHTML = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
+          <p class="text-sm text-gray-500">ID del Predio</p>
+          <p class="font-medium">${property.idPredio || 'No especificado'}</p>
+        </div>
+        <div>
           <p class="text-sm text-gray-500">Nombre del Predio</p>
           <p class="font-medium">${property.nombre}</p>
         </div>
@@ -491,25 +495,54 @@ function updateProperty(form) {
   
   // Crear objeto con los datos del formulario
   const formData = new FormData(form);
+  
+  // Obtener todos los campos del formulario con los nombres correctos
+  const nombre = document.getElementById('edit-property-name').value;
+  const rol = document.getElementById('edit-property-rol').value;
+  const modeloCompra = document.getElementById('edit-purchase-model').value;
+  const rutPropietario = document.getElementById('edit-owner-rut').value;
+  const nombrePropietario = document.getElementById('edit-owner-name').value;
+  const ubicacion = formData.get('ubicacion') || '';
+  
+  // Imprimir los valores para depuración
+  console.log('Nombre:', nombre);
+  console.log('Rol:', rol);
+  console.log('Modelo de Compra:', modeloCompra);
+  console.log('RUT Propietario:', rutPropietario);
+  console.log('Nombre Propietario:', nombrePropietario);
+  console.log('Ubicación:', ubicacion);
+  
+  // Crear objeto con los datos principales del predio
   const propertyData = {
-    nombre: formData.get('nombre'),
-    rol: formData.get('rol'),
-    modeloCompra: formData.get('modeloCompra'),
-    rutPropietario: formData.get('rutPropietario'),
-    nombrePropietario: formData.get('nombrePropietario')
+    nombre: nombre,
+    rol: rol,
+    modeloCompra: modeloCompra,
+    rutPropietario: rutPropietario,
+    nombrePropietario: nombrePropietario,
+    ubicacion: ubicacion
   };
   
-  console.log('Datos actualizados del predio:', propertyData);
-  
   // Si el modelo de compra es Intermediario, añadir esos datos
-  if (propertyData.modeloCompra === 'Intermediario') {
+  if (modeloCompra === 'Intermediario') {
+    const nombreIntermediario = document.getElementById('edit-intermediary-name').value;
+    const rutIntermediario = document.getElementById('edit-intermediary-rut').value;
+    const telefonoIntermediario = document.getElementById('edit-intermediary-phone').value;
+    const emailIntermediario = document.getElementById('edit-intermediary-email').value;
+    
+    console.log('Nombre Intermediario:', nombreIntermediario);
+    console.log('RUT Intermediario:', rutIntermediario);
+    console.log('Teléfono Intermediario:', telefonoIntermediario);
+    console.log('Email Intermediario:', emailIntermediario);
+    
     propertyData.intermediario = {
-      nombre: formData.get('nombreIntermediario'),
-      rut: formData.get('rutIntermediario'),
-      telefono: formData.get('telefonoIntermediario'),
-      email: formData.get('emailIntermediario')
+      nombre: nombreIntermediario,
+      rut: rutIntermediario,
+      telefono: telefonoIntermediario,
+      email: emailIntermediario
     };
   }
+  
+  console.log('Datos actualizados del predio:', propertyData);
   
   // Enviar datos al servidor
   fetch(`/api/predios/${propertyId}`, {
@@ -524,7 +557,6 @@ function updateProperty(form) {
     console.log('Respuesta del servidor:', response);
     if (!response.ok) {
       return response.text().then(text => {
-        // Intentar parsear como JSON, si falla, usar el texto como mensaje
         try {
           const errorData = JSON.parse(text);
           throw new Error(errorData.message || 'Error al actualizar el predio');
@@ -564,7 +596,21 @@ function saveProperty(form) {
   
   // Crear objeto con los datos del formulario
   const formData = new FormData(form);
+  
+  // Generar un ID de predio único
+  const fechaActual = new Date();
+  const año = fechaActual.getFullYear();
+  const mes = String(fechaActual.getMonth() + 1).padStart(2, '0');
+  const dia = String(fechaActual.getDate()).padStart(2, '0');
+  const hora = String(fechaActual.getHours()).padStart(2, '0');
+  const minutos = String(fechaActual.getMinutes()).padStart(2, '0');
+  const segundos = String(fechaActual.getSeconds()).padStart(2, '0');
+  
+  // Formato: PRED-AAAAMMDD-HHMMSS
+  const idPredio = `PRED-${año}${mes}${dia}-${hora}${minutos}${segundos}`;
+  
   const propertyData = {
+    idPredio: idPredio,
     nombre: formData.get('nombre'),
     rol: formData.get('rol'),
     modeloCompra: formData.get('modeloCompra'),
