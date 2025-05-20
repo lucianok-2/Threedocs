@@ -84,3 +84,32 @@ function showAddPropertyModal() {
     window.modalHelpers.showAddPropertyModal();
   }
 }
+
+// Función para mostrar un modal
+function showModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+}
+
+// Función para ocultar un modal
+function hideModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+// Función para cerrar modales cuando se hace clic fuera de ellos
+document.addEventListener('click', function(event) {
+  const modals = document.querySelectorAll('.fixed.inset-0.bg-gray-900.bg-opacity-50');
+  modals.forEach(modal => {
+    if (event.target === modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  });
+});

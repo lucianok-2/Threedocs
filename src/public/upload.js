@@ -49,14 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Mostrar mensaje al usuario
       alert('No hay predios registrados. Por favor, cree un predio primero.');
+      // Opcionalmente redirigir a la página de predios
+      // window.location.href = '/properties';
     } else {
       properties.forEach(property => {
         const option = document.createElement('option');
         option.value = property._id;
         option.textContent = property.nombre;
-        if (property.idPredio) {
-          option.textContent += ` (${property.idPredio})`;
-        }
         propertySelect.appendChild(option);
       });
     }
@@ -112,10 +111,35 @@ document.addEventListener('DOMContentLoaded', function() {
       documentTypes.filter(type => !type.required).forEach(type => {
         addDocumentTypeCard(type);
       });
+      
+      // Cargar documentos existentes para este predio
+      loadExistingDocuments(this.value);
     } else {
       documentSection.classList.add('hidden');
     }
   });
+  
+  // Función para cargar documentos existentes
+  function loadExistingDocuments(propertyId) {
+    fetch(`/api/predios/${propertyId}/documentos`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Error al cargar documentos');
+      }
+      return response.json();
+    })
+    .then(documents => {
+      // Aquí puedes mostrar los documentos existentes si lo deseas
+      console.log('Documentos existentes:', documents);
+    })
+    .catch(error => {
+      console.error('Error:', error);
+    });
+  }
   
   // Función para agregar una tarjeta de tipo de documento
   function addDocumentTypeCard(type) {
@@ -144,127 +168,163 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName) {
-    const modalTitle = document.getElementById('modal-title');
-    const documentTypeId = document.getElementById('document-type-id');
-    const propertyId = document.getElementById('property-id');
-    
-    modalTitle.textContent = `Subir Documento: ${typeName}`;
-    documentTypeId.value = typeId;
-    propertyId.value = propertySelect.value;
-    
-    // Limpiar el formulario
-    uploadForm.reset();
-    selectedFileText.classList.add('hidden');
-    selectedFileText.textContent = '';
-    
-    uploadModal.classList.remove('hidden');
+    if (window.modalHelpers && window.modalHelpers.openUploadModal) {
+      // Usar la función del archivo de modales
+      window.modalHelpers.openUploadModal(typeId, typeName, propertySelect.value);
+    } else {
+      // Fallback al código original
+      const modalTitle = document.getElementById('modal-title');
+      const documentTypeId = document.getElementById('document-type-id');
+      const propertyId = document.getElementById('property-id');
+      
+      if (modalTitle) modalTitle.textContent = `Subir Documento: ${typeName}`;
+      if (documentTypeId) documentTypeId.value = typeId;
+      if (propertyId) propertyId.value = propertySelect.value;
+      
+      // Limpiar el formulario
+      if (uploadForm) uploadForm.reset();
+      if (selectedFileText) {
+        selectedFileText.classList.add('hidden');
+        selectedFileText.textContent = '';
+      }
+      
+      if (uploadModal) uploadModal.classList.remove('hidden');
+    }
   }
   
   // Cerrar el modal
-  closeModalBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
-  });
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', function() {
+      if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
+        window.modalHelpers.closeUploadModal();
+      } else {
+        if (uploadModal) uploadModal.classList.add('hidden');
+      }
+    });
+  }
   
-  cancelUploadBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
-  });
+  if (cancelUploadBtn) {
+    cancelUploadBtn.addEventListener('click', function() {
+      if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
+        window.modalHelpers.closeUploadModal();
+      } else {
+        if (uploadModal) uploadModal.classList.add('hidden');
+      }
+    });
+  }
   
   // Manejar la selección de archivos
-  browseFilesBtn.addEventListener('click', function() {
-    fileInput.click();
-  });
+  if (browseFilesBtn) {
+    browseFilesBtn.addEventListener('click', function() {
+      if (fileInput) fileInput.click();
+    });
+  }
   
-  fileInput.addEventListener('change', function() {
-    if (this.files.length > 0) {
-      selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
-      selectedFileText.classList.remove('hidden');
-    } else {
-      selectedFileText.classList.add('hidden');
-    }
-  });
+  if (fileInput) {
+    fileInput.addEventListener('change', function() {
+      if (this.files.length > 0 && selectedFileText) {
+        selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
+        selectedFileText.classList.remove('hidden');
+      } else if (selectedFileText) {
+        selectedFileText.classList.add('hidden');
+      }
+    });
+  }
   
   // Manejar el arrastrar y soltar archivos
-  dropzone.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    this.classList.add('border-blue-500');
-  });
-  
-  dropzone.addEventListener('dragleave', function() {
-    this.classList.remove('border-blue-500');
-  });
-  
-  dropzone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    this.classList.remove('border-blue-500');
-    
-    if (e.dataTransfer.files.length > 0) {
-      fileInput.files = e.dataTransfer.files;
-      selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
-      selectedFileText.classList.remove('hidden');
-    }
-  });
-  
-  // Manejar el envío del formulario
-  uploadForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const documentName = document.getElementById('document-name').value;
-    const typeId = document.getElementById('document-type-id').value;
-    const propertyId = document.getElementById('property-id').value;
-    const file = fileInput.files[0];
-    
-    if (!documentName || !typeId || !propertyId || !file) {
-      alert('Por favor, complete todos los campos y seleccione un archivo.');
-      return;
-    }
-    
-    // Validar el tipo de archivo
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg'];
-    if (!allowedTypes.includes(file.type)) {
-      alert('Tipo de archivo no permitido. Por favor, seleccione un archivo PDF o JPG/JPEG.');
-      return;
-    }
-    
-    // Crear FormData para enviar el archivo
-    const formData = new FormData();
-    formData.append('documentName', documentName);
-    formData.append('documentTypeId', typeId);
-    formData.append('propertyId', propertyId);
-    formData.append('documentFile', file);
-    
-    // Deshabilitar el botón de envío y mostrar indicador de carga
-    submitUploadBtn.disabled = true;
-    submitUploadBtn.textContent = 'Subiendo...';
-    
-    // Enviar la solicitud
-    fetch('/api/documentos/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Error al subir el documento');
-      }
-      return response.json();
-    })
-    .then(data => {
-      alert('Documento subido correctamente');
-      uploadModal.classList.add('hidden');
-      
-      // Opcional: Actualizar la interfaz o redirigir
-      // window.location.reload();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      alert('Error al subir el documento: ' + error.message);
-    })
-    .finally(() => {
-      // Restaurar el botón de envío
-      submitUploadBtn.disabled = false;
-      submitUploadBtn.textContent = 'Subir Documento';
+  if (dropzone) {
+    dropzone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      this.classList.add('border-blue-500');
     });
-  });
+    
+    dropzone.addEventListener('dragleave', function() {
+      this.classList.remove('border-blue-500');
+    });
+    
+    dropzone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      this.classList.remove('border-blue-500');
+      
+      if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText) {
+        fileInput.files = e.dataTransfer.files;
+        selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
+        selectedFileText.classList.remove('hidden');
+      }
+    });
+  }
+  
+  // Mejorar el manejo del envío del formulario
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const documentName = document.getElementById('document-name');
+      const typeId = document.getElementById('document-type-id');
+      const propertyId = document.getElementById('property-id');
+      
+      if (!documentName || !typeId || !propertyId || !fileInput || !fileInput.files[0]) {
+        alert('Por favor, complete todos los campos y seleccione un archivo.');
+        return;
+      }
+      
+      const documentNameValue = documentName.value;
+      const typeIdValue = typeId.value;
+      const propertyIdValue = propertyId.value;
+      const file = fileInput.files[0];
+      
+      if (!documentNameValue || !typeIdValue || !propertyIdValue || !file) {
+        alert('Por favor, complete todos los campos y seleccione un archivo.');
+        return;
+      }
+      
+      // Crear FormData para enviar el archivo
+      const formData = new FormData();
+      formData.append('documentName', documentNameValue);
+      formData.append('documentTypeId', typeIdValue);
+      formData.append('propertyId', propertyIdValue);
+      formData.append('documentFile', file);
+      
+      // Deshabilitar el botón de envío y mostrar indicador de carga
+      if (submitUploadBtn) {
+        submitUploadBtn.disabled = true;
+        submitUploadBtn.textContent = 'Subiendo...';
+      }
+      
+      // Enviar la solicitud
+      fetch('/api/documentos/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Error al subir el documento');
+        }
+        return response.json();
+      })
+      .then(data => {
+        alert('Documento subido correctamente');
+        if (uploadModal) uploadModal.classList.add('hidden');
+        
+        // Recargar los documentos del predio
+        if (propertySelect.value) {
+          loadExistingDocuments(propertySelect.value);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al subir el documento: ' + error.message);
+      })
+      .finally(() => {
+        // Restaurar el botón de envío
+        if (submitUploadBtn) {
+          submitUploadBtn.disabled = false;
+          submitUploadBtn.textContent = 'Subir Documento';
+        }
+      });
+    });
+  }
 });

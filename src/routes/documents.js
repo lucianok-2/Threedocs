@@ -2,38 +2,18 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { admin, db } = require('../firebase');
-const { documentModel, DOCUMENT_TYPES } = require('../models/document');
-
-// Configuración de multer para almacenamiento temporal
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // Límite de 10MB
-  fileFilter: (req, file, cb) => {
-    // Verificar tipos de archivo permitidos
-    const filetypes = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx|dwg|dxf/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    }
-    cb(new Error("Error: Archivo no válido. Solo se permiten archivos de imagen, PDF, Office y CAD."));
-  }
-});
+const fs = require('fs');
+const crypto = require('crypto');
+const { db } = require('../firebase');
+const jwt = require('jsonwebtoken');
 
 // Middleware para verificar token
 function verificarToken(req, res, next) {
-  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+  // Obtener token del header Authorization, query params o cookies
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1] || 
+                req.query.token || 
+                req.cookies.token;
   
   if (!token) {
     return res.status(401).json({ error: 'Token requerido' });
@@ -49,116 +29,130 @@ function verificarToken(req, res, next) {
   }
 }
 
-// Obtener todos los documentos
-router.get('/', verificarToken, async (req, res) => {
-  try {
-    const documents = await documentModel.getAllDocuments();
-    res.json(documents);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// Aplicar middleware de verificación de token a todas las rutas
+router.use(verificarToken);
+
+// Configurar multer para almacenar archivos temporalmente
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: function (req, file, cb) {
+      const tempDir = path.join(__dirname, '../temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      cb(null, tempDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // Límite de 10MB
+  },
+  fileFilter: function (req, file, cb) {
+    // Permitir PDF, JPG, JPEG y otros formatos comunes
+    const allowedMimes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo de archivo no permitido. Solo se permiten PDF, imágenes y documentos de Office.'));
+    }
   }
 });
 
-// Obtener documentos por predio
-router.get('/property/:propertyId', verificarToken, async (req, res) => {
+// Ruta para subir un documento
+router.post('/upload', upload.single('documentFile'), async (req, res) => {
   try {
-    const { propertyId } = req.params;
-    const documents = await documentModel.getDocumentsByProperty(propertyId);
-    res.json(documents);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Obtener tipos de documentos
-router.get('/types', verificarToken, (req, res) => {
-  res.json(DOCUMENT_TYPES);
-});
-
-// Subir un nuevo documento
-router.post('/upload', verificarToken, upload.single('file'), async (req, res) => {
-  try {
+    // Verificar que se haya subido un archivo
     if (!req.file) {
       return res.status(400).json({ error: 'No se ha subido ningún archivo' });
     }
-
-    // Crear una referencia al bucket de Firebase Storage
-    const bucket = admin.storage().bucket();
     
-    // Ruta del archivo local
-    const filePath = req.file.path;
+    // Verificar que se hayan enviado todos los datos necesarios
+    if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId) {
+      // Eliminar el archivo temporal
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
     
-    // Nombre del archivo en Firebase Storage
-    const storageFileName = `documents/${Date.now()}_${req.file.originalname}`;
+    // Verificar que el predio exista y pertenezca al usuario
+    const predioRef = db.collection('predios').doc(req.body.propertyId);
+    const predioDoc = await predioRef.get();
     
-    // Subir archivo a Firebase Storage
-    await bucket.upload(filePath, {
-      destination: storageFileName,
-      metadata: {
-        contentType: req.file.mimetype,
-      }
-    });
+    if (!predioDoc.exists) {
+      // Eliminar el archivo temporal
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Predio no encontrado' });
+    }
     
-    // Obtener URL pública del archivo
-    const file = bucket.file(storageFileName);
-    const [url] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-01-2500', // Fecha lejana para URL casi permanente
-    });
+    const predioData = predioDoc.data();
     
-    // Crear documento en Firestore
+    // Verificar que el predio pertenezca al usuario actual
+    if (predioData.id_user !== req.usuario.uid) {
+      // Eliminar el archivo temporal
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
+    }
+    
+    // Leer el archivo
+    const fileBuffer = fs.readFileSync(req.file.path);
+    
+    // Generar hash SHA-256 del archivo
+    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    // Guardar el archivo en el sistema de archivos
+    const uploadDir = path.join(__dirname, '../../uploads', req.usuario.uid, req.body.propertyId);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    const fileName = `${Date.now()}_${path.basename(req.file.originalname)}`;
+    const filePath = path.join(uploadDir, fileName);
+    
+    fs.writeFileSync(filePath, fileBuffer);
+    
+    // Crear el documento en la base de datos
     const documentData = {
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype,
-      fileSize: req.file.size,
-      fileUrl: url,
-      storageFileName: storageFileName,
-      documentType: req.body.documentType,
-      propertyId: req.body.propertyId,
-      description: req.body.description || '',
-      uploadedBy: req.usuario.email,
+      nombre: req.body.documentName,
+      id_predio: req.body.propertyId,
+      id_user: req.usuario.uid,
+      tipo_documento: parseInt(req.body.documentTypeId),
+      fecha_subida: new Date(),
+      ruta_archivo: `/uploads/${req.usuario.uid}/${req.body.propertyId}/${fileName}`,
+      hash: fileHash,
+      tipo_archivo: req.file.mimetype,
+      tamano: req.file.size
     };
     
-    const newDocument = await documentModel.addDocument(documentData);
+    const docRef = await db.collection('documentos').add(documentData);
     
-    // Eliminar archivo temporal
-    require('fs').unlinkSync(filePath);
+    // Eliminar el archivo temporal
+    fs.unlinkSync(req.file.path);
     
-    res.status(201).json(newDocument);
+    res.status(201).json({
+      _id: docRef.id,
+      ...documentData
+    });
   } catch (error) {
     console.error('Error al subir documento:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Eliminar un documento
-router.delete('/:documentId', verificarToken, async (req, res) => {
-  try {
-    const { documentId } = req.params;
     
-    // Obtener documento para conocer su ruta en Storage
-    const docRef = db.collection('documents').doc(documentId);
-    const doc = await docRef.get();
-    
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Documento no encontrado' });
+    // Eliminar el archivo temporal si existe
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
     }
     
-    const documentData = doc.data();
-    
-    // Eliminar archivo de Storage si existe la ruta
-    if (documentData.storageFileName) {
-      const bucket = admin.storage().bucket();
-      await bucket.file(documentData.storageFileName).delete();
-    }
-    
-    // Eliminar documento de Firestore
-    await documentModel.deleteDocument(documentId);
-    
-    res.json({ id: documentId, deleted: true });
-  } catch (error) {
-    console.error('Error al eliminar documento:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Error al subir el documento' });
   }
 });
 
