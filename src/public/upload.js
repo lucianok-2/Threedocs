@@ -12,6 +12,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
   
+  // Verificar si estamos en la página correcta
+  if (!propertySelect) {
+    console.log('No estamos en la página de subida de documentos');
+    return; // Salir si no estamos en la página correcta
+  }
+  
   const token = localStorage.getItem('token');
   
   if (!token) {
@@ -35,12 +41,25 @@ document.addEventListener('DOMContentLoaded', function() {
   .then(properties => {
     propertySelect.innerHTML = '<option value="">Seleccione un predio...</option>';
     
-    properties.forEach(property => {
+    if (properties.length === 0) {
       const option = document.createElement('option');
-      option.value = property.id;
-      option.textContent = property.nombre;
+      option.disabled = true;
+      option.textContent = 'No hay predios disponibles';
       propertySelect.appendChild(option);
-    });
+      
+      // Mostrar mensaje al usuario
+      alert('No hay predios registrados. Por favor, cree un predio primero.');
+    } else {
+      properties.forEach(property => {
+        const option = document.createElement('option');
+        option.value = property._id;
+        option.textContent = property.nombre;
+        if (property.idPredio) {
+          option.textContent += ` (${property.idPredio})`;
+        }
+        propertySelect.appendChild(option);
+      });
+    }
   })
   .catch(error => {
     console.error('Error:', error);
@@ -70,9 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
       documentSection.classList.remove('hidden');
       
       // Limpiar el contenedor de tipos de documentos
-      while (documentTypesContainer.firstChild) {
-        documentTypesContainer.removeChild(documentTypesContainer.firstChild);
-      }
+      documentTypesContainer.innerHTML = '';
       
       // Agregar encabezado para documentos requeridos
       const requiredHeader = document.createElement('div');
@@ -127,39 +144,29 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName) {
-    if (window.modalHelpers && window.modalHelpers.openUploadModal) {
-      // Usar la función del archivo de modales
-      window.modalHelpers.openUploadModal(typeId, typeName, propertySelect.value);
-    } else {
-      // Fallback al código original
-      document.getElementById('modal-title').textContent = `Subir Documento: ${typeName}`;
-      document.getElementById('document-type-id').value = typeId;
-      document.getElementById('property-id').value = propertySelect.value;
-      
-      // Limpiar el formulario
-      uploadForm.reset();
-      selectedFileText.classList.add('hidden');
-      selectedFileText.textContent = '';
-      
-      uploadModal.classList.remove('hidden');
-    }
+    const modalTitle = document.getElementById('modal-title');
+    const documentTypeId = document.getElementById('document-type-id');
+    const propertyId = document.getElementById('property-id');
+    
+    modalTitle.textContent = `Subir Documento: ${typeName}`;
+    documentTypeId.value = typeId;
+    propertyId.value = propertySelect.value;
+    
+    // Limpiar el formulario
+    uploadForm.reset();
+    selectedFileText.classList.add('hidden');
+    selectedFileText.textContent = '';
+    
+    uploadModal.classList.remove('hidden');
   }
   
   // Cerrar el modal
   closeModalBtn.addEventListener('click', function() {
-    if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
-      window.modalHelpers.closeUploadModal();
-    } else {
-      uploadModal.classList.add('hidden');
-    }
+    uploadModal.classList.add('hidden');
   });
   
   cancelUploadBtn.addEventListener('click', function() {
-    if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
-      window.modalHelpers.closeUploadModal();
-    } else {
-      uploadModal.classList.add('hidden');
-    }
+    uploadModal.classList.add('hidden');
   });
   
   // Manejar la selección de archivos
@@ -202,11 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
     e.preventDefault();
     
     const documentName = document.getElementById('document-name').value;
+    const typeId = document.getElementById('document-type-id').value;
     const propertyId = document.getElementById('property-id').value;
-    const documentTypeId = document.getElementById('document-type-id').value;
     const file = fileInput.files[0];
     
-    if (!documentName || !propertyId || !documentTypeId || !file) {
+    if (!documentName || !typeId || !propertyId || !file) {
       alert('Por favor, complete todos los campos y seleccione un archivo.');
       return;
     }
@@ -221,8 +228,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Crear FormData para enviar el archivo
     const formData = new FormData();
     formData.append('documentName', documentName);
+    formData.append('documentTypeId', typeId);
     formData.append('propertyId', propertyId);
-    formData.append('documentTypeId', documentTypeId);
     formData.append('documentFile', file);
     
     // Deshabilitar el botón de envío y mostrar indicador de carga
@@ -247,12 +254,12 @@ document.addEventListener('DOMContentLoaded', function() {
       alert('Documento subido correctamente');
       uploadModal.classList.add('hidden');
       
-      // Redirigir a la página de documentos del predio
-      window.location.href = `/property/${propertyId}/documents`;
+      // Opcional: Actualizar la interfaz o redirigir
+      // window.location.reload();
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Error al subir el documento');
+      alert('Error al subir el documento: ' + error.message);
     })
     .finally(() => {
       // Restaurar el botón de envío

@@ -4,149 +4,24 @@
     <h2 class="text-2xl font-bold text-gray-800 mb-6">Subir Documentos</h2>
     
     <div class="bg-white rounded-lg shadow-md p-6">
-      <div id="document-section">
+      <!-- Selector de predio -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Seleccionar Predio</h3>
+        <div class="max-w-md">
+          <label for="property-select" class="block text-gray-700 font-medium mb-2">Predio <span class="text-red-500">*</span></label>
+          <select id="property-select" class="w-full px-4 py-2 border rounded-lg" required>
+            <option value="">Cargando predios...</option>
+          </select>
+          <p class="mt-2 text-sm text-gray-500">Seleccione un predio para ver los documentos disponibles</p>
+        </div>
+      </div>
+      
+      <!-- Sección de documentos (inicialmente oculta) -->
+      <div id="document-section" class="hidden">
         <h3 class="text-lg font-semibold text-gray-800 mb-4">Documentación</h3>
         
         <div id="document-types-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <!-- Documentos requeridos -->
-          <div class="col-span-full mb-4">
-            <h4 class="font-medium text-gray-700 mb-2">Documentos Requeridos <span class="text-red-500">*</span></h4>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">1. CONSULTA ANTECEDENTE BIEN RAIZ (SII) <span class="text-red-500">*</span></h5>
-            <button data-doc-id="1" data-doc-name="CONSULTA ANTECEDENTE BIEN RAIZ (SII)" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">2. RESOLUCIÓN PLAN DE MANEJO <span class="text-red-500">*</span></h5>
-            <button data-doc-id="2" data-doc-name="RESOLUCIÓN PLAN DE MANEJO" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">4. ESCRITURA O TITULOS DE DOMINIO <span class="text-red-500">*</span></h5>
-            <button data-doc-id="4" data-doc-name="ESCRITURA O TITULOS DE DOMINIO" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <!-- Documentos opcionales -->
-          <div class="col-span-full mt-6 mb-4">
-            <h4 class="font-medium text-gray-700 mb-2">Documentos Opcionales</h4>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">3. AVISO EJECUCION DE FAENA</h5>
-            <button data-doc-id="3" data-doc-name="AVISO EJECUCION DE FAENA" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">6. CONTRATO COMPRA Y VENTA</h5>
-            <button data-doc-id="6" data-doc-name="CONTRATO COMPRA Y VENTA" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">7. PLANO DEL PREDIO</h5>
-            <button data-doc-id="7" data-doc-name="PLANO DEL PREDIO" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">8. CONTRATO DE TRABAJO</h5>
-            <button data-doc-id="8" data-doc-name="CONTRATO DE TRABAJO" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">9. DERECHO A SABER</h5>
-            <button data-doc-id="9" data-doc-name="DERECHO A SABER" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">10. ENTREGA EPP</h5>
-            <button data-doc-id="10" data-doc-name="ENTREGA EPP" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">11. VARIOS</h5>
-            <button data-doc-id="11" data-doc-name="VARIOS" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">12. REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD</h5>
-            <button data-doc-id="12" data-doc-name="REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">13. REGISTRO DE CAPACITACIÓN</h5>
-            <button data-doc-id="13" data-doc-name="REGISTRO DE CAPACITACIÓN" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-          
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <h5 class="font-medium text-gray-700 mb-2">14. DOCTO. ADICIONAL</h5>
-            <button data-doc-id="14" data-doc-name="DOCTO. ADICIONAL" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
+          <!-- Los tipos de documentos se cargarán dinámicamente -->
         </div>
       </div>
     </div>
@@ -164,6 +39,7 @@
         </div>
         <form id="upload-form" class="p-6">
           <input type="hidden" id="document-type-id">
+          <input type="hidden" id="property-id">
           <div class="mb-4">
             <label for="document-name" class="block text-gray-700 font-medium mb-2">Nombre del Documento</label>
             <input type="text" id="document-name" class="w-full px-4 py-2 border rounded-lg" placeholder="Ingrese un nombre descriptivo" required>
@@ -194,156 +70,3 @@
 <!-- Incluir los archivos JavaScript -->
 <script src="/js/modals.js"></script>
 <script src="/upload.js"></script>
-
-document>
-document.addEventListener('DOMContentLoaded', function() {
-  // Referencias a elementos del DOM
-  const uploadModal = document.getElementById('upload-modal');
-  const closeModalBtn = document.getElementById('close-modal');
-  const uploadForm = document.getElementById('upload-form');
-  const fileInput = document.getElementById('file-input');
-  const browseFilesBtn = document.getElementById('browse-files');
-  const dropzone = document.getElementById('dropzone');
-  const selectedFileText = document.getElementById('selected-file');
-  const cancelUploadBtn = document.getElementById('cancel-upload');
-  const submitUploadBtn = document.getElementById('submit-upload');
-  const documentTypeId = document.getElementById('document-type-id');
-  
-  // Verificar token de autenticación
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-    window.location.href = '/';
-    return;
-  }
-  
-  // Agregar event listeners a los botones de subir documento
-  const uploadButtons = document.querySelectorAll('.upload-doc-btn');
-  uploadButtons.forEach(button => {
-    button.addEventListener('click', function() {
-      const typeId = this.getAttribute('data-doc-id');
-      const typeName = this.getAttribute('data-doc-name');
-      openUploadModal(typeId, typeName);
-    });
-  });
-  
-  // Función para abrir el modal de subida
-  function openUploadModal(typeId, typeName) {
-    document.getElementById('modal-title').textContent = `Subir Documento: ${typeName}`;
-    documentTypeId.value = typeId;
-    
-    // Limpiar el formulario
-    uploadForm.reset();
-    selectedFileText.classList.add('hidden');
-    selectedFileText.textContent = '';
-    
-    uploadModal.classList.remove('hidden');
-  }
-  
-  // Cerrar el modal
-  closeModalBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
-  });
-  
-  cancelUploadBtn.addEventListener('click', function() {
-    uploadModal.classList.add('hidden');
-  });
-  
-  // Manejar la selección de archivos
-  browseFilesBtn.addEventListener('click', function() {
-    fileInput.click();
-  });
-  
-  fileInput.addEventListener('change', function() {
-    if (this.files.length > 0) {
-      selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
-      selectedFileText.classList.remove('hidden');
-    } else {
-      selectedFileText.classList.add('hidden');
-    }
-  });
-  
-  // Manejar el arrastrar y soltar archivos
-  dropzone.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    this.classList.add('border-blue-500');
-  });
-  
-  dropzone.addEventListener('dragleave', function() {
-    this.classList.remove('border-blue-500');
-  });
-  
-  dropzone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    this.classList.remove('border-blue-500');
-    
-    if (e.dataTransfer.files.length > 0) {
-      fileInput.files = e.dataTransfer.files;
-      selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
-      selectedFileText.classList.remove('hidden');
-    }
-  });
-  
-  // Manejar el envío del formulario
-  uploadForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const documentName = document.getElementById('document-name').value;
-    const typeId = documentTypeId.value;
-    const file = fileInput.files[0];
-    
-    if (!documentName || !typeId || !file) {
-      alert('Por favor, complete todos los campos y seleccione un archivo.');
-      return;
-    }
-    
-    // Validar el tipo de archivo
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg'];
-    if (!allowedTypes.includes(file.type)) {
-      alert('Tipo de archivo no permitido. Por favor, seleccione un archivo PDF o JPG/JPEG.');
-      return;
-    }
-    
-    // Crear FormData para enviar el archivo
-    const formData = new FormData();
-    formData.append('documentName', documentName);
-    formData.append('documentTypeId', typeId);
-    formData.append('documentFile', file);
-    
-    // Deshabilitar el botón de envío y mostrar indicador de carga
-    submitUploadBtn.disabled = true;
-    submitUploadBtn.textContent = 'Subiendo...';
-    
-    // Enviar la solicitud
-    fetch('/api/documentos/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Error al subir el documento');
-      }
-      return response.json();
-    })
-    .then(data => {
-      alert('Documento subido correctamente');
-      uploadModal.classList.add('hidden');
-      
-      // Opcional: Actualizar la interfaz o redirigir
-      // window.location.reload();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      alert('Error al subir el documento');
-    })
-    .finally(() => {
-      // Restaurar el botón de envío
-      submitUploadBtn.disabled = false;
-      submitUploadBtn.textContent = 'Subir Documento';
-    });
-  });
-});
-</script>
