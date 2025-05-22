@@ -1,6 +1,24 @@
 const { db } = require('../firebase');
+const mongoose = require('mongoose');
 
 // Tipos de documentos
+const documentTypes = [
+  { id: 1, name: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)", required: true },
+  { id: 2, name: "RESOLUCIÓN PLAN DE MANEJO", required: false },
+  { id: 3, name: "AVISO EJECUCION DE FAENA", required: false },
+  { id: 4, name: "ESCRITURA O TITULOS DE DOMINIO", required: false },
+  { id: 6, name: "CONTRATO COMPRA Y VENTA", required: false },
+  { id: 7, name: "PLANO DEL PREDIO", required: false },
+  { id: 8, name: "CONTRATO DE TRABAJO", required: false },
+  { id: 9, name: "DERECHO A SABER", required: false },
+  { id: 10, name: "ENTREGA EPP", required: false },
+  { id: 11, name: "VARIOS", required: false },
+  { id: 12, name: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD", required: false },
+  { id: 13, name: "REGISTRO DE CAPACITACIÓN", required: false },
+  { id: 14, name: "DOCTO. ADICIONAL", required: false }
+];
+
+// Constantes para tipos de documentos (para uso en código)
 const DOCUMENT_TYPES = {
   CONSULTA_ANTECEDENTE: '1. CONSULTA ANTECEDENTE BIEN RAIZ (SII)',
   RESOLUCION_PLAN_MANEJO: '2. RESOLUCIÓN PLAN DE MANEJO',
@@ -17,10 +35,10 @@ const DOCUMENT_TYPES = {
   DOCTO_ADICIONAL: '14. DOCTO. ADICIONAL'
 };
 
-// Colección de documentos
+// Colección de documentos en Firebase
 const documentsCollection = db.collection('documents');
 
-// Funciones para manejar documentos
+// Funciones para manejar documentos en Firebase
 const documentModel = {
   // Obtener todos los documentos
   getAllDocuments: async () => {
@@ -109,11 +127,13 @@ const documentModel = {
 
   // Obtener tipos de documentos
   getDocumentTypes: () => {
-    return DOCUMENT_TYPES;
+    return documentTypes;
   }
 };
 
 module.exports = {
   documentModel,
-  DOCUMENT_TYPES
+  DOCUMENT_TYPES,
+  documentTypes,
+  Documento
 };
