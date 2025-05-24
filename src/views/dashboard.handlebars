@@ -11,37 +11,11 @@
       <button id="go-to-upload" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg">
         Subir Documentos
       </button>
-      
-      <script>
-        document.getElementById('go-to-upload').addEventListener('click', function() {
-          const token = localStorage.getItem('token');
-          if (token) {
-            window.location.href = `/upload`;
-          } else {
-            alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-            window.location.href = '/';
-          }
-        });
-      </script>
     </div>
     
     <!-- Resto del contenido del dashboard -->
   </div>
 </div>
-
-<script>
-  document.getElementById('go-to-upload').addEventListener('click', function() {
-    const token = localStorage.getItem('token');
-    if (token) {
-      window.location.href = `/upload`;
-    } else {
-      alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-      window.location.href = '/';
-    }
-  });
-</script>
-
-
 
 <!-- Contenido principal -->
 <div class="ml-64 p-8">
@@ -305,86 +279,5 @@
   </svg>
 </div>
 
-<script>
-  // Función para manejar la barra lateral
-  function setupSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
-    const showSidebarBtn = document.getElementById('show-sidebar-btn');
-    const mainContent = document.querySelector('.ml-64');
-    
-    // Función para verificar el tamaño de la pantalla
-    function checkScreenSize() {
-      if (window.innerWidth < 1024) { // lg breakpoint en Tailwind
-        sidebar.classList.add('-translate-x-full');
-        mainContent.classList.remove('ml-64');
-        mainContent.classList.add('ml-0');
-        showSidebarBtn.classList.remove('hidden');
-      } else {
-        sidebar.classList.remove('-translate-x-full');
-        mainContent.classList.add('ml-64');
-        mainContent.classList.remove('ml-0');
-        showSidebarBtn.classList.add('hidden');
-      }
-    }
-    
-    // Verificar al cargar la página
-    checkScreenSize();
-    
-    // Verificar cuando cambia el tamaño de la ventana
-    window.addEventListener('resize', checkScreenSize);
-    
-    // Alternar la barra lateral
-    toggleSidebarBtn.addEventListener('click', function() {
-      sidebar.classList.add('-translate-x-full');
-      showSidebarBtn.classList.remove('hidden');
-    });
-    
-    // Mostrar la barra lateral
-    showSidebarBtn.addEventListener('click', function() {
-      sidebar.classList.remove('-translate-x-full');
-      showSidebarBtn.classList.add('hidden');
-    });
-  }
-  
-  // Configurar la barra lateral cuando se carga el documento
-  document.addEventListener('DOMContentLoaded', function() {
-    setupSidebar();
-    
-    // Código existente para el botón de subir documentos
-    document.getElementById('go-to-upload').addEventListener('click', function() {
-      const token = localStorage.getItem('token');
-      if (token) {
-        window.location.href = `/upload`;
-      } else {
-        alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-        window.location.href = '/';
-      }
-    });
-    
-    // Código para el enlace de subir documentos en la barra lateral
-    document.getElementById('upload-link').addEventListener('click', function() {
-      const token = localStorage.getItem('token');
-      if (token) {
-        window.location.href = `/upload`;
-      } else {
-        alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-        window.location.href = '/';
-      }
-    });
-  });
-  
-  // Función para alternar carpetas
-  function toggleFolder(folderId) {
-    const folderContent = document.getElementById(folderId + '-content');
-    const folderIcon = document.getElementById(folderId + '-icon');
-    
-    if (folderContent.classList.contains('hidden')) {
-      folderContent.classList.remove('hidden');
-      folderIcon.setAttribute('d', 'M19 9l-7 7-7-7');
-    } else {
-      folderContent.classList.add('hidden');
-      folderIcon.setAttribute('d', 'M9 5l7 7-7 7');
-    }
-  }
-</script>
+<!-- Incluir el archivo JavaScript del dashboard -->
+<script src="/js/dashboard.js"></script>

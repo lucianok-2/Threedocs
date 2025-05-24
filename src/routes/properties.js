@@ -150,15 +150,20 @@ router.put('/:id', verificarToken, async (req, res) => {
     }
     
     const predioData = {
-      nombre: req.body.nombre,
-      ubicacion: req.body.ubicacion,
-      rol: req.body.rol || '',
-      superficie: req.body.superficie || null,
-      descripcion: req.body.descripcion || '',
-      idPredio: req.body.idPredio || predioActual.idPredio, // Mantener el idPredio existente
+      nombre: req.body.nombre || predioActual.nombre,
+      ubicacion: req.body.ubicacion || predioActual.ubicacion || '',
+      rol: req.body.rol || predioActual.rol || '',
+      superficie: req.body.superficie || predioActual.superficie || null,
+      descripcion: req.body.descripcion || predioActual.descripcion || '',
+      idPredio: predioActual.idPredio, // Mantener el idPredio existente
       fechaActualizacion: new Date(),
       // Mantener el id_user original
-      id_user: req.usuario.uid
+      id_user: req.usuario.uid,
+      // Actualizar rutPropietario y nombrePropietario
+      rutPropietario: req.body.rutPropietario || predioActual.rutPropietario || '',
+      nombrePropietario: req.body.nombrePropietario || predioActual.nombrePropietario || '',
+      // Actualizar modeloCompra
+      modeloCompra: req.body.modeloCompra || predioActual.modeloCompra || 'Propietario'
     };
     
     // Actualizar información de certificaciones si existe
@@ -166,17 +171,12 @@ router.put('/:id', verificarToken, async (req, res) => {
       predioData.certificaciones = req.body.certificaciones;
     }
     
-    // Actualizar información del propietario si existe
-    if (req.body.propietario) {
-      predioData.propietario = {
-        nombre: req.body.propietario.nombre || predioActual.propietario?.nombre || '',
-        rut: req.body.propietario.rut || predioActual.propietario?.rut || ''
-      };
-    }
-    
-    // Actualizar modelo de compra si existe
-    if (req.body.modeloCompra) {
-      predioData.modeloCompra = req.body.modeloCompra;
+    // Actualizar información del intermediario si existe
+    if (req.body.intermediario) {
+      predioData.intermediario = req.body.intermediario;
+    } else if (predioData.modeloCompra !== 'Intermediario') {
+      // Si el modelo ya no es intermediario, eliminar la información de intermediario
+      predioData.intermediario = null;
     }
     
     await predioRef.update(predioData);
