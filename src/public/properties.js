@@ -1,22 +1,21 @@
-function toggleIntermediarySection(modalType) {
-  const purchaseModel = document.getElementById(`${modalType}-purchase-model`);
-  const intermediarySection = document.getElementById(`${modalType}-intermediary-section`);
+function toggleIntermediarySection(formType) {
+  const section = document.getElementById(`${formType}-intermediary-section`);
+  const purchaseModel = document.getElementById(`${formType}-purchase-model`);
   
-  // Verificar que los elementos existan antes de intentar acceder a ellos
-  if (purchaseModel && intermediarySection) {
+  if (purchaseModel && section) {
     if (purchaseModel.value === 'Intermediario') {
-      intermediarySection.classList.remove('hidden');
+      section.classList.remove('hidden');
       // Hacer campos de intermediario requeridos
-      const intermediaryName = document.getElementById(`${modalType}-intermediary-name`);
-      const intermediaryRut = document.getElementById(`${modalType}-intermediary-rut`);
+      const intermediaryName = document.getElementById(`${formType}-intermediary-name`);
+      const intermediaryRut = document.getElementById(`${formType}-intermediary-rut`);
       
       if (intermediaryName) intermediaryName.setAttribute('required', '');
       if (intermediaryRut) intermediaryRut.setAttribute('required', '');
     } else {
-      intermediarySection.classList.add('hidden');
+      section.classList.add('hidden');
       // Quitar required de los campos de intermediario
-      const intermediaryName = document.getElementById(`${modalType}-intermediary-name`);
-      const intermediaryRut = document.getElementById(`${modalType}-intermediary-rut`);
+      const intermediaryName = document.getElementById(`${formType}-intermediary-name`);
+      const intermediaryRut = document.getElementById(`${formType}-intermediary-rut`);
       
       if (intermediaryName) intermediaryName.removeAttribute('required');
       if (intermediaryRut) intermediaryRut.removeAttribute('required');
@@ -44,22 +43,25 @@ function setupCertificationCheckboxes() {
       }
       
       // Si se marca "Sin Certificación", desmarcar las otras
-      if (checkboxId === 'edit-cert-none' && this.checked) {
-        certCheckboxes.forEach(cb => {
-          if (cb.id !== 'edit-cert-none') {
-            cb.checked = false;
-            const otherCodeInput = document.getElementById(cb.id + '-code');
-            if (otherCodeInput) {
-              otherCodeInput.classList.add('hidden');
-              otherCodeInput.value = '';
-            }
+      if ((checkboxId === 'edit-cert-none' || checkboxId === 'add-cert-none') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const otherCheckboxes = document.querySelectorAll(`#${prefix}-cert-fsc, #${prefix}-cert-pefc`);
+        
+        otherCheckboxes.forEach(cb => {
+          cb.checked = false;
+          const otherCodeInput = document.getElementById(cb.id + '-code');
+          if (otherCodeInput) {
+            otherCodeInput.classList.add('hidden');
+            otherCodeInput.value = '';
           }
         });
       }
       
       // Si se marca alguna certificación, desmarcar "Sin Certificación"
-      if (checkboxId !== 'edit-cert-none' && this.checked) {
-        const noneCheckbox = document.getElementById('edit-cert-none');
+      if ((checkboxId === 'edit-cert-fsc' || checkboxId === 'edit-cert-pefc' || 
+           checkboxId === 'add-cert-fsc' || checkboxId === 'add-cert-pefc') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const noneCheckbox = document.getElementById(`${prefix}-cert-none`);
         if (noneCheckbox) {
           noneCheckbox.checked = false;
         }
@@ -225,10 +227,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Configurar botón de cerrar modal
+  // Configurar botones para cerrar modales
   const closeAddModalBtn = document.getElementById('close-add-modal');
   if (closeAddModalBtn) {
     closeAddModalBtn.addEventListener('click', closeAddPropertyModal);
+  }
+  
+  const closeEditModalBtn = document.getElementById('close-edit-modal');
+  if (closeEditModalBtn) {
+    closeEditModalBtn.addEventListener('click', closeEditPropertyModal);
+  }
+  
+  // Configurar botones para cancelar en modales
+  const cancelAddPropertyBtn = document.getElementById('cancel-add-property');
+  if (cancelAddPropertyBtn) {
+    cancelAddPropertyBtn.addEventListener('click', closeAddPropertyModal);
+  }
+  
+  const cancelEditPropertyBtn = document.getElementById('cancel-edit-property');
+  if (cancelEditPropertyBtn) {
+    cancelEditPropertyBtn.addEventListener('click', closeEditPropertyModal);
   }
   
   // Configurar el formulario para añadir predio
@@ -236,7 +254,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (addPropertyForm) {
     addPropertyForm.addEventListener('submit', function(e) {
       e.preventDefault();
-      console.log('Formulario de añadir predio enviado');
       saveProperty(this);
     });
   }
@@ -248,12 +265,6 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       updateProperty(this);
     });
-  }
-  
-  // Configurar botón para cancelar añadir predio
-  const cancelAddPropertyBtn = document.getElementById('cancel-add-property');
-  if (cancelAddPropertyBtn) {
-    cancelAddPropertyBtn.addEventListener('click', closeAddPropertyModal);
   }
   
   // Configurar botones de editar y eliminar predio
@@ -299,8 +310,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // Configurar checkboxes de certificación
+  setupCertificationCheckboxes();
+  
   // Inicializar estado de sección de intermediario
   toggleIntermediarySection('add');
+  toggleIntermediarySection('edit');
 });
 
 // Función para mostrar el modal de añadir predio
@@ -314,6 +329,9 @@ function showAddPropertyModal() {
     if (form) {
       form.reset();
     }
+    
+    // Reiniciar estado de sección de intermediario
+    toggleIntermediarySection('add');
   } else {
     console.error('No se encontró el modal de añadir predio');
   }
@@ -326,6 +344,16 @@ function closeAddPropertyModal() {
     modal.classList.add('hidden');
   } else {
     console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para cerrar el modal de editar predio
+function closeEditPropertyModal() {
+  const modal = document.getElementById('edit-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  } else {
+    console.error('No se encontró el modal de editar predio');
   }
 }
 
@@ -758,22 +786,25 @@ function setupCertificationCheckboxes() {
       }
       
       // Si se marca "Sin Certificación", desmarcar las otras
-      if (checkboxId === 'edit-cert-none' && this.checked) {
-        certCheckboxes.forEach(cb => {
-          if (cb.id !== 'edit-cert-none') {
-            cb.checked = false;
-            const otherCodeInput = document.getElementById(cb.id + '-code');
-            if (otherCodeInput) {
-              otherCodeInput.classList.add('hidden');
-              otherCodeInput.value = '';
-            }
+      if ((checkboxId === 'edit-cert-none' || checkboxId === 'add-cert-none') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const otherCheckboxes = document.querySelectorAll(`#${prefix}-cert-fsc, #${prefix}-cert-pefc`);
+        
+        otherCheckboxes.forEach(cb => {
+          cb.checked = false;
+          const otherCodeInput = document.getElementById(cb.id + '-code');
+          if (otherCodeInput) {
+            otherCodeInput.classList.add('hidden');
+            otherCodeInput.value = '';
           }
         });
       }
       
       // Si se marca alguna certificación, desmarcar "Sin Certificación"
-      if (checkboxId !== 'edit-cert-none' && this.checked) {
-        const noneCheckbox = document.getElementById('edit-cert-none');
+      if ((checkboxId === 'edit-cert-fsc' || checkboxId === 'edit-cert-pefc' || 
+           checkboxId === 'add-cert-fsc' || checkboxId === 'add-cert-pefc') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const noneCheckbox = document.getElementById(`${prefix}-cert-none`);
         if (noneCheckbox) {
           noneCheckbox.checked = false;
         }
@@ -783,25 +814,24 @@ function setupCertificationCheckboxes() {
 }
 
 // Mejorar la función toggleIntermediarySection
-function toggleIntermediarySection(modalType) {
-  const purchaseModel = document.getElementById(`${modalType}-purchase-model`);
-  const intermediarySection = document.getElementById(`${modalType}-intermediary-section`);
+function toggleIntermediarySection(formType) {
+  const section = document.getElementById(`${formType}-intermediary-section`);
+  const purchaseModel = document.getElementById(`${formType}-purchase-model`);
   
-  // Verificar que los elementos existan antes de intentar acceder a ellos
-  if (purchaseModel && intermediarySection) {
+  if (purchaseModel && section) {
     if (purchaseModel.value === 'Intermediario') {
-      intermediarySection.classList.remove('hidden');
+      section.classList.remove('hidden');
       // Hacer campos de intermediario requeridos
-      const intermediaryName = document.getElementById(`${modalType}-intermediary-name`);
-      const intermediaryRut = document.getElementById(`${modalType}-intermediary-rut`);
+      const intermediaryName = document.getElementById(`${formType}-intermediary-name`);
+      const intermediaryRut = document.getElementById(`${formType}-intermediary-rut`);
       
       if (intermediaryName) intermediaryName.setAttribute('required', '');
       if (intermediaryRut) intermediaryRut.setAttribute('required', '');
     } else {
-      intermediarySection.classList.add('hidden');
+      section.classList.add('hidden');
       // Quitar required de los campos de intermediario
-      const intermediaryName = document.getElementById(`${modalType}-intermediary-name`);
-      const intermediaryRut = document.getElementById(`${modalType}-intermediary-rut`);
+      const intermediaryName = document.getElementById(`${formType}-intermediary-name`);
+      const intermediaryRut = document.getElementById(`${formType}-intermediary-rut`);
       
       if (intermediaryName) intermediaryName.removeAttribute('required');
       if (intermediaryRut) intermediaryRut.removeAttribute('required');
@@ -829,22 +859,25 @@ function setupCertificationCheckboxes() {
       }
       
       // Si se marca "Sin Certificación", desmarcar las otras
-      if (checkboxId === 'edit-cert-none' && this.checked) {
-        certCheckboxes.forEach(cb => {
-          if (cb.id !== 'edit-cert-none') {
-            cb.checked = false;
-            const otherCodeInput = document.getElementById(cb.id + '-code');
-            if (otherCodeInput) {
-              otherCodeInput.classList.add('hidden');
-              otherCodeInput.value = '';
-            }
+      if ((checkboxId === 'edit-cert-none' || checkboxId === 'add-cert-none') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const otherCheckboxes = document.querySelectorAll(`#${prefix}-cert-fsc, #${prefix}-cert-pefc`);
+        
+        otherCheckboxes.forEach(cb => {
+          cb.checked = false;
+          const otherCodeInput = document.getElementById(cb.id + '-code');
+          if (otherCodeInput) {
+            otherCodeInput.classList.add('hidden');
+            otherCodeInput.value = '';
           }
         });
       }
       
       // Si se marca alguna certificación, desmarcar "Sin Certificación"
-      if (checkboxId !== 'edit-cert-none' && this.checked) {
-        const noneCheckbox = document.getElementById('edit-cert-none');
+      if ((checkboxId === 'edit-cert-fsc' || checkboxId === 'edit-cert-pefc' || 
+           checkboxId === 'add-cert-fsc' || checkboxId === 'add-cert-pefc') && this.checked) {
+        const prefix = checkboxId.startsWith('edit') ? 'edit' : 'add';
+        const noneCheckbox = document.getElementById(`${prefix}-cert-none`);
         if (noneCheckbox) {
           noneCheckbox.checked = false;
         }
@@ -955,6 +988,9 @@ function showAddPropertyModal() {
     if (form) {
       form.reset();
     }
+    
+    // Reiniciar estado de sección de intermediario
+    toggleIntermediarySection('add');
   } else {
     console.error('No se encontró el modal de añadir predio');
   }
@@ -967,6 +1003,16 @@ function closeAddPropertyModal() {
     modal.classList.add('hidden');
   } else {
     console.error('No se encontró el modal de añadir predio');
+  }
+}
+
+// Función para cerrar el modal de editar predio
+function closeEditPropertyModal() {
+  const modal = document.getElementById('edit-property-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  } else {
+    console.error('No se encontró el modal de editar predio');
   }
 }
 
