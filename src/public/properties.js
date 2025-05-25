@@ -365,8 +365,6 @@ function editProperty(propertyId) {
       if (property.modeloCompra === 'Intermediario' && property.intermediario) {
         document.getElementById('edit-intermediary-name').value = property.intermediario.nombre || '';
         document.getElementById('edit-intermediary-rut').value = property.intermediario.rut || '';
-        document.getElementById('edit-intermediary-phone').value = property.intermediario.telefono || '';
-        document.getElementById('edit-intermediary-email').value = property.intermediario.email || '';
       }
       
       // Actualizar la visibilidad de la sección de intermediario
@@ -1008,8 +1006,6 @@ function editProperty(propertyId) {
       if (property.modeloCompra === 'Intermediario' && property.intermediario) {
         document.getElementById('edit-intermediary-name').value = property.intermediario.nombre || '';
         document.getElementById('edit-intermediary-rut').value = property.intermediario.rut || '';
-        document.getElementById('edit-intermediary-phone').value = property.intermediario.telefono || '';
-        document.getElementById('edit-intermediary-email').value = property.intermediario.email || '';
       }
       
       // Actualizar la visibilidad de la sección de intermediario
