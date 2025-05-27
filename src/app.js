@@ -202,6 +202,9 @@ app.post('/upload', verificarToken, upload.single('documentFile'), async (req, r
 });
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
 
+// Ruta para la galería de documentos
+app.get('/galery', verificarToken, (req, res) => res.render('galery', { usuario: req.usuario }));
+
 // Ruta para cerrar sesión
 app.get('/logout', (req, res) => { 
    res.clearCookie('token'); // borra la cookie token
