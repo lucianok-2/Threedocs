@@ -361,7 +361,7 @@ function renderProperties(properties) {
         
         propertyCard.innerHTML = `
             <div class="relative">
-                <img src="${property.imageUrl || '/images/property-placeholder.jpg'}" alt="${property.nombre || 'Sin nombre'}" class="w-full h-48 object-cover">
+                <img src="${property.imageUrl || '/images/5077814.png'}" alt="${property.nombre || 'Sin nombre'}" class="w-full h-48 object-cover">
                 <div class="absolute top-2 right-2 bg-${statusColor} text-white px-2 py-1 rounded-full text-xs font-bold">${getPropertyStatus(property)}</div>
             </div>
             <div class="p-6">

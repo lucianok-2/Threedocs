@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const propertySelect = document.getElementById('property-select');
   const documentSection = document.getElementById('document-section');
   const documentTypesContainer = document.getElementById('document-types-container');
@@ -11,60 +11,60 @@ document.addEventListener('DOMContentLoaded', function() {
   const selectedFileText = document.getElementById('selected-file');
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
-  
+
   // Verificar si estamos en la página correcta
   if (!propertySelect) {
     console.log('No estamos en la página de subida de documentos');
     return; // Salir si no estamos en la página correcta
   }
-  
+
   const token = localStorage.getItem('token');
-  
+
   if (!token) {
     alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
     window.location.href = '/';
     return;
   }
-  
+
   // Cargar la lista de predios
   fetch('/api/predios', {
     headers: {
       'Authorization': `Bearer ${token}`
     }
   })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error('Error al cargar los predios');
-    }
-    return response.json();
-  })
-  .then(properties => {
-    propertySelect.innerHTML = '<option value="">Seleccione un predio...</option>';
-    
-    if (properties.length === 0) {
-      const option = document.createElement('option');
-      option.disabled = true;
-      option.textContent = 'No hay predios disponibles';
-      propertySelect.appendChild(option);
-      
-      // Mostrar mensaje al usuario
-      alert('No hay predios registrados. Por favor, cree un predio primero.');
-      // Opcionalmente redirigir a la página de predios
-      // window.location.href = '/properties';
-    } else {
-      properties.forEach(property => {
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Error al cargar los predios');
+      }
+      return response.json();
+    })
+    .then(properties => {
+      propertySelect.innerHTML = '<option value="">Seleccione un predio...</option>';
+
+      if (properties.length === 0) {
         const option = document.createElement('option');
-        option.value = property._id;
-        option.textContent = property.nombre;
+        option.disabled = true;
+        option.textContent = 'No hay predios disponibles';
         propertySelect.appendChild(option);
-      });
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('Error al cargar los predios');
-  });
-  
+
+        // Mostrar mensaje al usuario
+        alert('No hay predios registrados. Por favor, cree un predio primero.');
+        // Opcionalmente redirigir a la página de predios
+        // window.location.href = '/properties';
+      } else {
+        properties.forEach(property => {
+          const option = document.createElement('option');
+          option.value = property._id;
+          option.textContent = property.nombre;
+          propertySelect.appendChild(option);
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error al cargar los predios');
+    });
+
   // Tipos de documentos
   const documentTypes = [
     { id: 1, name: 'CONSULTA ANTECEDENTE BIEN RAIZ (SII)', required: true },
@@ -81,44 +81,44 @@ document.addEventListener('DOMContentLoaded', function() {
     { id: 13, name: 'REGISTRO DE CAPACITACIÓN', required: false },
     { id: 14, name: 'DOCTO. ADICIONAL', required: false }
   ];
-  
+
   // Mostrar tipos de documentos cuando se selecciona un predio
-  propertySelect.addEventListener('change', function() {
+  propertySelect.addEventListener('change', function () {
     if (this.value) {
       documentSection.classList.remove('hidden');
-      
+
       // Limpiar el contenedor de tipos de documentos
       documentTypesContainer.innerHTML = '';
-      
+
       // Agregar encabezado para documentos requeridos
       const requiredHeader = document.createElement('div');
       requiredHeader.className = 'col-span-full mb-4';
       requiredHeader.innerHTML = '<h4 class="font-medium text-gray-700 mb-2">Documentos Requeridos <span class="text-red-500">*</span></h4>';
       documentTypesContainer.appendChild(requiredHeader);
-      
+
       // Agregar tipos de documentos requeridos
       documentTypes.filter(type => type.required).forEach(type => {
         addDocumentTypeCard(type);
       });
-      
+
       // Agregar encabezado para documentos opcionales
       const optionalHeader = document.createElement('div');
       optionalHeader.className = 'col-span-full mb-4 mt-6';
       optionalHeader.innerHTML = '<h4 class="font-medium text-gray-700 mb-2">Documentos Opcionales</h4>';
       documentTypesContainer.appendChild(optionalHeader);
-      
+
       // Agregar tipos de documentos opcionales
       documentTypes.filter(type => !type.required).forEach(type => {
         addDocumentTypeCard(type);
       });
-      
+
       // Cargar documentos existentes para este predio
       loadExistingDocuments(this.value);
     } else {
       documentSection.classList.add('hidden');
     }
   });
-  
+
   // Función para cargar documentos existentes
   function loadExistingDocuments(propertyId) {
     fetch(`/api/predios/${propertyId}/documentos`, {
@@ -126,21 +126,47 @@ document.addEventListener('DOMContentLoaded', function() {
         'Authorization': `Bearer ${token}`
       }
     })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Error al cargar documentos');
-      }
-      return response.json();
-    })
-    .then(documents => {
-      // Aquí puedes mostrar los documentos existentes si lo deseas
-      console.log('Documentos existentes:', documents);
-    })
-    .catch(error => {
-      console.error('Error:', error);
-    });
+      .then(response => response.json())
+      .then(documents => {
+        // Crear un mapa de documentos existentes
+        const existingDocs = new Map(documents.map(doc => [doc.documentTypeId, doc]));
+
+        // Actualizar el estado de cada tarjeta de documento
+        documentTypes.forEach(type => {
+          const card = document.querySelector(`[data-type-id="${type.id}"]`).closest('.bg-white');
+          const existingDoc = existingDocs.get(type.id.toString());
+
+          if (existingDoc) {
+            // Documento existe
+            card.classList.remove('border-red-200');
+            card.classList.add('border-green-200');
+            card.querySelector('button').textContent = 'Ver documento';
+            card.querySelector('button').classList.remove('text-blue-600');
+            card.querySelector('button').classList.add('text-green-600');
+
+            // Agregar información del documento
+            const infoDiv = card.querySelector('.doc-info') || document.createElement('div');
+            infoDiv.className = 'doc-info mt-2 text-sm text-gray-600';
+            infoDiv.innerHTML = `
+            <p>Responsable: ${existingDoc.responsiblePerson}</p>
+            <p>Fecha: ${new Date(existingDoc.documentDate).toLocaleDateString()}</p>
+          `;
+            if (!card.querySelector('.doc-info')) card.appendChild(infoDiv);
+          } else {
+            // Documento faltante
+            card.classList.remove('border-green-200');
+            card.classList.add('border-red-200');
+            card.querySelector('button').textContent = 'Documento faltante - Subir';
+            card.querySelector('button').classList.remove('text-green-600');
+            card.querySelector('button').classList.add('text-red-600');
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error:', error);
+      });
   }
-  
+
   // Función para agregar una tarjeta de tipo de documento
   function addDocumentTypeCard(type) {
     const card = document.createElement('div');
@@ -154,18 +180,18 @@ document.addEventListener('DOMContentLoaded', function() {
         Subir documento
       </button>
     `;
-    
+
     documentTypesContainer.appendChild(card);
-    
+
     // Agregar event listener al botón de subir
     const uploadBtn = card.querySelector('.upload-doc-btn');
-    uploadBtn.addEventListener('click', function() {
+    uploadBtn.addEventListener('click', function () {
       const typeId = this.getAttribute('data-type-id');
       const typeName = this.getAttribute('data-type-name');
       openUploadModal(typeId, typeName);
     });
   }
-  
+
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName) {
     if (window.modalHelpers && window.modalHelpers.openUploadModal) {
@@ -176,25 +202,25 @@ document.addEventListener('DOMContentLoaded', function() {
       const modalTitle = document.getElementById('modal-title');
       const documentTypeId = document.getElementById('document-type-id');
       const propertyId = document.getElementById('property-id');
-      
+
       if (modalTitle) modalTitle.textContent = `Subir Documento: ${typeName}`;
       if (documentTypeId) documentTypeId.value = typeId;
       if (propertyId) propertyId.value = propertySelect.value;
-      
+
       // Limpiar el formulario
       if (uploadForm) uploadForm.reset();
       if (selectedFileText) {
         selectedFileText.classList.add('hidden');
         selectedFileText.textContent = '';
       }
-      
+
       if (uploadModal) uploadModal.classList.remove('hidden');
     }
   }
-  
+
   // Cerrar el modal
   if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', function() {
+    closeModalBtn.addEventListener('click', function () {
       if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
         window.modalHelpers.closeUploadModal();
       } else {
@@ -202,9 +228,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   if (cancelUploadBtn) {
-    cancelUploadBtn.addEventListener('click', function() {
+    cancelUploadBtn.addEventListener('click', function () {
       if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
         window.modalHelpers.closeUploadModal();
       } else {
@@ -212,16 +238,16 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   // Manejar la selección de archivos
   if (browseFilesBtn) {
-    browseFilesBtn.addEventListener('click', function() {
+    browseFilesBtn.addEventListener('click', function () {
       if (fileInput) fileInput.click();
     });
   }
-  
+
   if (fileInput) {
-    fileInput.addEventListener('change', function() {
+    fileInput.addEventListener('change', function () {
       if (this.files.length > 0 && selectedFileText) {
         selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
         selectedFileText.classList.remove('hidden');
@@ -230,22 +256,22 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   // Manejar el arrastrar y soltar archivos
   if (dropzone) {
-    dropzone.addEventListener('dragover', function(e) {
+    dropzone.addEventListener('dragover', function (e) {
       e.preventDefault();
       this.classList.add('border-blue-500');
     });
-    
-    dropzone.addEventListener('dragleave', function() {
+
+    dropzone.addEventListener('dragleave', function () {
       this.classList.remove('border-blue-500');
     });
-    
-    dropzone.addEventListener('drop', function(e) {
+
+    dropzone.addEventListener('drop', function (e) {
       e.preventDefault();
       this.classList.remove('border-blue-500');
-      
+
       if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText) {
         fileInput.files = e.dataTransfer.files;
         selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
@@ -253,78 +279,114 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   // Mejorar el manejo del envío del formulario
   if (uploadForm) {
-    uploadForm.addEventListener('submit', function(e) {
+    uploadForm.addEventListener('submit', async function (e) {
       e.preventDefault();
-      
+
       const documentName = document.getElementById('document-name');
       const typeId = document.getElementById('document-type-id');
       const propertyId = document.getElementById('property-id');
-      
-      if (!documentName || !typeId || !propertyId || !fileInput || !fileInput.files[0]) {
-        alert('Por favor, complete todos los campos y seleccione un archivo.');
+      const responsiblePerson = document.getElementById('document-responsible'); // Corregido
+      const documentDate = document.getElementById('document-date');
+      const documentDescription = document.getElementById('document-description');
+
+      if (!documentName || !typeId || !propertyId || !fileInput || !fileInput.files[0] || !responsiblePerson || !documentDate) {
+        const missingFields = [];
+        if (!documentName.value) missingFields.push('Nombre del documento');
+        if (!responsiblePerson.value) missingFields.push('Persona responsable');
+        if (!documentDate.value) missingFields.push('Fecha del documento');
+        if (!fileInput.files[0]) missingFields.push('Archivo');
+        
+        alert(`Por favor complete los siguientes campos requeridos:\n\n${missingFields.join('\n')}`);
         return;
       }
-      
-      const documentNameValue = documentName.value;
-      const typeIdValue = typeId.value;
-      const propertyIdValue = propertyId.value;
+
       const file = fileInput.files[0];
-      
-      if (!documentNameValue || !typeIdValue || !propertyIdValue || !file) {
-        alert('Por favor, complete todos los campos y seleccione un archivo.');
-        return;
-      }
-      
-      // Crear FormData para enviar el archivo
+
+      // Calcular el hash del archivo
+      const arrayBuffer = await file.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Crear FormData con todos los metadatos
       const formData = new FormData();
-      formData.append('documentName', documentNameValue);
-      formData.append('documentTypeId', typeIdValue);
-      formData.append('propertyId', propertyIdValue);
+      formData.append('documentName', documentName.value);
+      formData.append('documentTypeId', typeId.value);
+      formData.append('propertyId', propertyId.value);
       formData.append('documentFile', file);
-      
-      // Deshabilitar el botón de envío y mostrar indicador de carga
+      formData.append('responsiblePerson', responsiblePerson.value);
+      formData.append('documentDate', documentDate.value);
+      formData.append('documentDescription', documentDescription.value);
+      formData.append('fileHash', hashHex);
+      formData.append('userId', JSON.parse(localStorage.getItem('user'))?.uid || 'unknown');
+      formData.append('uploadDate', new Date().toISOString());
+
+      // Deshabilitar el botón de envío
       if (submitUploadBtn) {
         submitUploadBtn.disabled = true;
         submitUploadBtn.textContent = 'Subiendo...';
       }
-      
-      // Enviar la solicitud
-      fetch('/api/documentos/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Error al subir el documento');
-        }
-        return response.json();
-      })
-      .then(data => {
-        alert('Documento subido correctamente');
-        if (uploadModal) uploadModal.classList.add('hidden');
+
+      try {
+        // Subir a Firebase Storage
+        const storageRef = firebase.storage().ref();
+        const fileRef = storageRef.child(`documents/${propertyId.value}/${hashHex}/${file.name}`);
         
-        // Recargar los documentos del predio
-        if (propertySelect.value) {
-          loadExistingDocuments(propertySelect.value);
-        }
-      })
-      .catch(error => {
+        // Mostrar progreso de subida
+        const uploadTask = fileRef.put(file);
+        
+        uploadTask.on('state_changed', 
+          (snapshot) => {
+            // Mostrar progreso
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            console.log(`Upload is ${progress}% done`);
+            if (submitUploadBtn) {
+              submitUploadBtn.textContent = `Subiendo... ${Math.round(progress)}%`;
+            }
+          },
+          (error) => {
+            console.error('Error de subida:', error);
+            alert(`Error al subir el archivo: ${error.message}`);
+          },
+          async () => {
+            // Subida completada
+            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+            // Agregar URL al FormData
+            formData.append('fileUrl', downloadURL);
+
+            // Enviar metadatos al servidor
+            const response = await fetch('/api/documentos/upload', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: formData
+            });
+
+            if (!response.ok) throw new Error('Error al subir el documento');
+
+            const data = await response.json();
+            alert('Documento subido correctamente');
+            if (uploadModal) uploadModal.classList.add('hidden');
+
+            // Recargar los documentos
+            if (propertySelect.value) {
+              loadExistingDocuments(propertySelect.value);
+            }
+          }
+        );
+      } catch (error) {
         console.error('Error:', error);
         alert('Error al subir el documento: ' + error.message);
-      })
-      .finally(() => {
-        // Restaurar el botón de envío
+      } finally {
         if (submitUploadBtn) {
           submitUploadBtn.disabled = false;
           submitUploadBtn.textContent = 'Subir Documento';
         }
-      });
+      }
     });
   }
 });

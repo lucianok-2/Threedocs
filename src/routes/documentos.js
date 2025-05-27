@@ -2,12 +2,34 @@ const express = require('express');
 const router = express.Router();
 const documentController = require('../controllers/documentController');
 const authMiddleware = require('../middleware/auth');
+const { storage } = require('../firebase');
+const bucket = storage.bucket();
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
 
 // Ruta para subir un documento
-router.post('/upload', documentController.uploadDocument);
+router.post('/upload', async (req, res) => {
+  try {
+    const file = req.files.file;
+    const fileName = `${Date.now()}_${file.name}`;
+    const fileUpload = bucket.file(`documents/${fileName}`);
+    
+    await fileUpload.save(file.data, {
+      metadata: {
+        contentType: file.mimetype
+      }
+    });
+    
+    // Guardar metadatos en tu base de datos
+    // ...
+    
+    res.status(200).send('Archivo subido correctamente');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error al subir archivo');
+  }
+});
 
 // Ruta para obtener documentos de un predio
 router.get('/predio/:idPredio', documentController.getDocumentsByProperty);
