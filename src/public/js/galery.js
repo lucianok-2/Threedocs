@@ -1,3 +1,5 @@
+
+
 // Estas funciones son solo un esqueleto y deberán ser implementadas
 // con la lógica real para cargar datos desde Firebase/Firestore
 
@@ -12,8 +14,8 @@ function openProperty(propertyId) {
         .then(response => response.json())
         .then(data => {
             // Actualizar la UI con los datos del predio
-            document.getElementById('modalPropertyTitle').textContent = data.nombre || data.name || 'Predio sin nombre';
-            document.getElementById('modalPropertyAddress').textContent = data.ubicacion || data.address || 'Sin dirección';
+            document.getElementById('modalPropertyTitle').textContent = data.nombre || 'Predio sin nombre';
+            document.getElementById('modalPropertyAddress').textContent = data.ubicacion || 'Sin dirección';
             document.getElementById('modalPropertyRut').textContent = data.rutPropietario || 'Sin RUT';
             
             // Cargar los documentos del predio
@@ -34,29 +36,56 @@ function loadPropertyDocuments(propertyId) {
             const documentsList = document.getElementById('documents-list');
             documentsList.innerHTML = '';
             
-            if (documents.length === 0) {
-                documentsList.innerHTML = '<div class="p-4 text-center text-gray-500">No hay documentos disponibles para este predio.</div>';
-                return;
-            }
+            // Obtener todos los tipos de documentos definidos
+            const allDocumentTypes = {
+                CONSULTA_ANTECEDENTE: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)",
+                RESOLUCION_PLAN_MANEJO: "RESOLUCIÓN PLAN DE MANEJO",
+                AVISO_EJECUCION_FAENA: "AVISO EJECUCION DE FAENA",
+                ESCRITURA_TITULOS: "ESCRITURA O TITULOS DE DOMINIO",
+                CONTRATO_COMPRA_VENTA: "CONTRATO COMPRA Y VENTA",
+                PLANO_PREDIO: "PLANO DEL PREDIO",
+                CONTRATO_TRABAJO: "CONTRATO DE TRABAJO",
+                DERECHO_SABER: "DERECHO A SABER",
+                ENTREGA_EPP: "ENTREGA EPP",
+                VARIOS: "VARIOS",
+                REGLAMENTO_INTERNO: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD",
+                REGISTRO_CAPACITACION: "REGISTRO DE CAPACITACIÓN",
+                DOCTO_ADICIONAL: "DOCTO. ADICIONAL"
+            };
             
-            // Crear elementos para cada documento
+            // Crear un mapa de documentos existentes por tipo
+            const existingDocsByType = {};
             documents.forEach(doc => {
+                if (doc.tipo) {
+                    existingDocsByType[doc.tipo] = doc;
+                }
+            });
+            
+            // Mostrar todos los tipos de documentos, existentes o no
+            Object.entries(allDocumentTypes).forEach(([key, docType]) => {
+                const existingDoc = existingDocsByType[docType];
+                const estado = existingDoc ? (existingDoc.estado || 'completo') : 'faltante';
+                const docId = existingDoc ? existingDoc._id : `missing-${key}`;
+                
                 const docElement = document.createElement('div');
-                docElement.className = `p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-${getStatusColor(doc.estado || 'faltante')}`;
-                docElement.setAttribute('data-document-id', doc._id);
-                docElement.onclick = () => showDocument(doc._id);
+                docElement.className = `p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-${getStatusColor(estado)}`;
+                docElement.setAttribute('data-document-id', docId);
+                
+                if (existingDoc) {
+                    docElement.onclick = () => showDocument(docId);
+                }
                 
                 docElement.innerHTML = `
                     <div class="flex justify-between items-start">
                         <div>
-                            <h4 class="font-medium text-gray-800">${doc.nombre || doc.name || 'Documento sin nombre'}</h4>
-                            <p class="text-sm text-gray-500">${doc.tipo || doc.type || 'Sin tipo'}</p>
+                            <h4 class="font-medium text-gray-800">${docType}</h4>
+                            <p class="text-sm text-gray-500">${existingDoc ? (existingDoc.tipo || 'Sin tipo') : 'Sin tipo'}</p>
                         </div>
-                        <span class="bg-${getStatusBgColor(doc.estado || 'faltante')} text-${getStatusTextColor(doc.estado || 'faltante')} text-xs px-2 py-1 rounded-full">${getStatusLabel(doc.estado || 'faltante')}</span>
+                        <span class="bg-${getStatusBgColor(estado)} text-${getStatusTextColor(estado)} text-xs px-2 py-1 rounded-full">${getStatusLabel(estado)}</span>
                     </div>
                     <div class="flex items-center mt-2 text-sm text-gray-500">
                         <i class="fas fa-calendar-alt mr-2"></i>
-                        <span>${formatDate(doc.fecha_creacion || doc.fecha || doc.uploadDate || new Date())}</span>
+                        <span>${existingDoc ? formatDate(existingDoc.fecha_creacion || existingDoc.fecha || existingDoc.uploadDate || new Date()) : formatDate(new Date())}</span>
                     </div>
                 `;
                 
@@ -78,7 +107,10 @@ function showDocument(docId) {
     });
     
     // Resaltar el documento seleccionado
-    document.querySelector(`[data-document-id="${docId}"]`).classList.add('bg-blue-50');
+    const selectedDoc = document.querySelector(`[data-document-id="${docId}"]`);
+    if (selectedDoc) {
+        selectedDoc.classList.add('bg-blue-50');
+    }
     
     // Mostrar información del documento seleccionado
     const docTitle = document.getElementById('documentTitle');
@@ -88,27 +120,32 @@ function showDocument(docId) {
     const previewPlaceholder = document.getElementById('preview-placeholder');
     
     // Cargar datos del documento desde Firestore
-    fetch(`/api/documents/${docId}`)
-        .then(response => response.json())
+    fetch(`/api/documentos/${docId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar el documento');
+            }
+            return response.json();
+        })
         .then(doc => {
             // Actualizar título y detalles
-            docTitle.textContent = doc.name;
+            docTitle.textContent = doc.nombre || doc.name || 'Documento';
             
             // Ocultar el placeholder y mostrar la vista previa
             previewPlaceholder.classList.add('hidden');
             docPreview.classList.remove('hidden');
             
             // Actualizar detalles del documento
-            document.getElementById('docType').textContent = doc.type;
-            document.getElementById('docStatus').innerHTML = `<span class="bg-${getStatusBgColor(doc.status)} text-${getStatusTextColor(doc.status)} px-2 py-1 rounded-full text-xs">${doc.status}</span>`;
-            document.getElementById('docDate').textContent = formatDate(doc.uploadDate);
+            document.getElementById('docType').textContent = doc.tipo || doc.tipo_documento || '-';
+            document.getElementById('docStatus').innerHTML = `<span class="bg-${getStatusBgColor(doc.estado)} text-${getStatusTextColor(doc.estado)} px-2 py-1 rounded-full text-xs">${getStatusLabel(doc.estado)}</span>`;
+            document.getElementById('docDate').textContent = formatDate(doc.fecha_creacion || doc.fecha_subida || new Date());
             document.getElementById('docRut').textContent = doc.rutAsociado || '-';
             document.getElementById('docResponsible').textContent = doc.responsable || '-';
             document.getElementById('docNotes').textContent = doc.observaciones || '-';
             
             // Cargar el documento en el iframe (si es un PDF) o mostrar una vista previa adecuada
             const iframe = document.getElementById('documentIframe');
-            iframe.src = doc.fileUrl;
+            iframe.src = doc.ruta_archivo || doc.fileUrl || '';
         })
         .catch(error => {
             console.error('Error al cargar el documento:', error);
@@ -324,15 +361,15 @@ function renderProperties(properties) {
         
         propertyCard.innerHTML = `
             <div class="relative">
-                <img src="${property.imageUrl || '/images/property-placeholder.jpg'}" alt="${property.name}" class="w-full h-48 object-cover">
+                <img src="${property.imageUrl || '/images/property-placeholder.jpg'}" alt="${property.nombre || 'Sin nombre'}" class="w-full h-48 object-cover">
                 <div class="absolute top-2 right-2 bg-${statusColor} text-white px-2 py-1 rounded-full text-xs font-bold">${getPropertyStatus(property)}</div>
             </div>
             <div class="p-6">
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-xl font-bold text-gray-800">${property.name}</h3>
+                    <h3 class="text-xl font-bold text-gray-800">${property.nombre || 'Sin nombre'}</h3>
                     <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">${property.rutPropietario || 'Sin RUT'}</span>
                 </div>
-                <p class="text-gray-600 mb-4">${property.address || 'Sin dirección'}</p>
+                <p class="text-gray-600 mb-4">${property.ubicacion || 'Sin dirección'}</p>
                 
                 <div class="flex justify-between items-center">
                     <div>
