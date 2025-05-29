@@ -1,10 +1,12 @@
-
-
 // Estas funciones son solo un esqueleto y deberán ser implementadas
 // con la lógica real para cargar datos desde Firebase/Firestore
 
+// Variable global para almacenar el predio actual
+let currentPropertyId = null;
+
 // Función para abrir el modal del predio
 function openProperty(propertyId) {
+    currentPropertyId = propertyId;
     // Mostrar el modal
     document.getElementById('propertyModal').classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
@@ -38,54 +40,59 @@ function loadPropertyDocuments(propertyId) {
             
             // Obtener todos los tipos de documentos definidos
             const allDocumentTypes = {
-                CONSULTA_ANTECEDENTE: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)",
-                RESOLUCION_PLAN_MANEJO: "RESOLUCIÓN PLAN DE MANEJO",
-                AVISO_EJECUCION_FAENA: "AVISO EJECUCION DE FAENA",
-                ESCRITURA_TITULOS: "ESCRITURA O TITULOS DE DOMINIO",
-                CONTRATO_COMPRA_VENTA: "CONTRATO COMPRA Y VENTA",
-                PLANO_PREDIO: "PLANO DEL PREDIO",
-                CONTRATO_TRABAJO: "CONTRATO DE TRABAJO",
-                DERECHO_SABER: "DERECHO A SABER",
-                ENTREGA_EPP: "ENTREGA EPP",
-                VARIOS: "VARIOS",
-                REGLAMENTO_INTERNO: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD",
-                REGISTRO_CAPACITACION: "REGISTRO DE CAPACITACIÓN",
-                DOCTO_ADICIONAL: "DOCTO. ADICIONAL"
+                1: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)",
+                2: "RESOLUCIÓN PLAN DE MANEJO",
+                3: "AVISO EJECUCION DE FAENA",
+                4: "ESCRITURA O TITULOS DE DOMINIO",
+                5: "CONTRATO COMPRA Y VENTA",
+                6: "PLANO DEL PREDIO",
+                7: "CONTRATO DE TRABAJO",
+                8: "DERECHO A SABER",
+                9: "ENTREGA EPP",
+                10: "VARIOS",
+                11: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD",
+                12: "REGISTRO DE CAPACITACIÓN",
+                13: "DOCTO. ADICIONAL"
             };
             
             // Crear un mapa de documentos existentes por tipo
             const existingDocsByType = {};
             documents.forEach(doc => {
-                if (doc.tipo) {
-                    existingDocsByType[doc.tipo] = doc;
+                if (doc.tipo_documento) {
+                    if (!existingDocsByType[doc.tipo_documento]) {
+                        existingDocsByType[doc.tipo_documento] = [];
+                    }
+                    existingDocsByType[doc.tipo_documento].push(doc);
                 }
             });
             
             // Mostrar todos los tipos de documentos, existentes o no
-            Object.entries(allDocumentTypes).forEach(([key, docType]) => {
-                const existingDoc = existingDocsByType[docType];
-                const estado = existingDoc ? (existingDoc.estado || 'completo') : 'faltante';
-                const docId = existingDoc ? existingDoc._id : `missing-${key}`;
+            Object.entries(allDocumentTypes).forEach(([typeId, docTypeName]) => {
+                const existingDocs = existingDocsByType[parseInt(typeId)] || [];
+                const estado = existingDocs.length > 0 ? 'completo' : 'faltante';
+                const docCount = existingDocs.length;
                 
                 const docElement = document.createElement('div');
                 docElement.className = `p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-${getStatusColor(estado)}`;
-                docElement.setAttribute('data-document-id', docId);
+                docElement.setAttribute('data-document-type', typeId);
+                docElement.setAttribute('data-property-id', propertyId);
                 
-                if (existingDoc) {
-                    docElement.onclick = () => showDocument(docId);
-                }
+                // Agregar evento click para mostrar documentos del tipo
+                docElement.onclick = () => showDocumentsByType(parseInt(typeId), docTypeName, propertyId);
                 
                 docElement.innerHTML = `
                     <div class="flex justify-between items-start">
                         <div>
-                            <h4 class="font-medium text-gray-800">${docType}</h4>
-                            <p class="text-sm text-gray-500">${existingDoc ? (existingDoc.tipo || 'Sin tipo') : 'Sin tipo'}</p>
+                            <h4 class="font-medium text-gray-800">${docTypeName}</h4>
+                            <p class="text-sm text-gray-500">${docCount > 0 ? `${docCount} documento(s)` : 'Sin documentos'}</p>
                         </div>
-                        <span class="bg-${getStatusBgColor(estado)} text-${getStatusTextColor(estado)} text-xs px-2 py-1 rounded-full">${getStatusLabel(estado)}</span>
+                        <span class="bg-${getStatusBgColor(estado)} text-${getStatusTextColor(estado)} text-xs px-2 py-1 rounded-full">
+                            ${getStatusLabel(estado)} ${docCount > 0 ? `(${docCount})` : ''}
+                        </span>
                     </div>
                     <div class="flex items-center mt-2 text-sm text-gray-500">
-                        <i class="fas fa-calendar-alt mr-2"></i>
-                        <span>${existingDoc ? formatDate(existingDoc.fecha_creacion || existingDoc.fecha || existingDoc.uploadDate || new Date()) : formatDate(new Date())}</span>
+                        <i class="fas fa-file-alt mr-2"></i>
+                        <span>${docCount > 0 ? 'Hacer clic para ver documentos' : 'No hay documentos de este tipo'}</span>
                     </div>
                 `;
                 
@@ -99,59 +106,197 @@ function loadPropertyDocuments(propertyId) {
         });
 }
 
-// Función para mostrar un documento específico
-function showDocument(docId) {
-    // Resetear todos los documentos
-    document.querySelectorAll('[data-document-id]').forEach(el => {
-        el.classList.remove('bg-blue-50');
+// Nueva función para mostrar documentos por tipo
+function showDocumentsByType(documentTypeId, documentTypeName, propertyId) {
+    // Crear parámetros de consulta para filtrar por tipo, predio y usuario
+    const params = new URLSearchParams({
+        tipo_documento: documentTypeId,
+        id_predio: propertyId
     });
     
-    // Resaltar el documento seleccionado
-    const selectedDoc = document.querySelector(`[data-document-id="${docId}"]`);
-    if (selectedDoc) {
-        selectedDoc.classList.add('bg-blue-50');
-    }
-    
-    // Mostrar información del documento seleccionado
-    const docTitle = document.getElementById('documentTitle');
-    const docIcon = document.getElementById('documentIcon');
-    const docMessage = document.getElementById('documentMessage');
-    const docPreview = document.getElementById('documentPreviewContent');
-    const previewPlaceholder = document.getElementById('preview-placeholder');
-    
-    // Cargar datos del documento desde Firestore
-    fetch(`/api/documentos/${docId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Error al cargar el documento');
-            }
-            return response.json();
-        })
-        .then(doc => {
-            // Actualizar título y detalles
-            docTitle.textContent = doc.nombre || doc.name || 'Documento';
-            
-            // Ocultar el placeholder y mostrar la vista previa
-            previewPlaceholder.classList.add('hidden');
-            docPreview.classList.remove('hidden');
-            
-            // Actualizar detalles del documento
-            document.getElementById('docType').textContent = doc.tipo || doc.tipo_documento || '-';
-            document.getElementById('docStatus').innerHTML = `<span class="bg-${getStatusBgColor(doc.estado)} text-${getStatusTextColor(doc.estado)} px-2 py-1 rounded-full text-xs">${getStatusLabel(doc.estado)}</span>`;
-            document.getElementById('docDate').textContent = formatDate(doc.fecha_creacion || doc.fecha_subida || new Date());
-            document.getElementById('docRut').textContent = doc.rutAsociado || '-';
-            document.getElementById('docResponsible').textContent = doc.responsable || '-';
-            document.getElementById('docNotes').textContent = doc.observaciones || '-';
-            
-            // Cargar el documento en el iframe (si es un PDF) o mostrar una vista previa adecuada
-            const iframe = document.getElementById('documentIframe');
-            iframe.src = doc.ruta_archivo || doc.fileUrl || '';
+    fetch(`/api/documentos/buscar?${params}`)
+        .then(response => response.json())
+        .then(documents => {
+            // Mostrar modal o panel con la lista de documentos
+            showDocumentsListModal(documents, documentTypeName);
         })
         .catch(error => {
-            console.error('Error al cargar el documento:', error);
-            previewPlaceholder.classList.remove('hidden');
-            docPreview.classList.add('hidden');
-            docMessage.textContent = 'Error al cargar el documento';
+            console.error('Error al cargar documentos por tipo:', error);
+            alert('Error al cargar los documentos. Por favor, intenta de nuevo.');
+        });
+}
+
+// Función para mostrar modal con lista de documentos
+function showDocumentsListModal(documents, documentTypeName) {
+    // Crear o mostrar modal para lista de documentos
+    let documentsModal = document.getElementById('documentsListModal');
+    
+    if (!documentsModal) {
+        // Crear el modal si no existe
+        documentsModal = document.createElement('div');
+        documentsModal.id = 'documentsListModal';
+        documentsModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden';
+        
+        documentsModal.innerHTML = `
+            <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div class="p-6 border-b border-gray-200">
+                    <div class="flex justify-between items-center">
+                        <h2 id="documentsModalTitle" class="text-2xl font-bold text-gray-800"></h2>
+                        <button onclick="closeDocumentsListModal()" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 overflow-y-auto max-h-[70vh]">
+                    <div id="documentsListContent" class="space-y-4">
+                        <!-- Aquí se cargarán los documentos -->
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(documentsModal);
+    }
+    
+    // Actualizar título
+    document.getElementById('documentsModalTitle').textContent = `Documentos: ${documentTypeName}`;
+    
+    // Mostrar documentos
+    const documentsListContent = document.getElementById('documentsListContent');
+    documentsListContent.innerHTML = '';
+    
+    if (documents.length === 0) {
+        documentsListContent.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-file-alt text-gray-400 text-4xl mb-4"></i>
+                <p class="text-gray-500">No hay documentos de este tipo</p>
+            </div>
+        `;
+    } else {
+        documents.forEach(doc => {
+            const docElement = document.createElement('div');
+            docElement.className = 'bg-gray-50 rounded-lg p-4 hover:bg-gray-100 cursor-pointer transition-colors';
+            docElement.onclick = () => viewDocument(doc);
+            
+            docElement.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-shrink-0">
+                            <i class="fas ${getFileIcon(doc.tipo_archivo)} text-2xl text-blue-500"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-800">${doc.nombre}</h3>
+                            <p class="text-sm text-gray-500">
+                                Subido el ${formatDate(doc.fecha_subida)} • ${formatFileSize(doc.tamano)}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="event.stopPropagation(); downloadDocument('${doc._id}')" 
+                                class="text-blue-500 hover:text-blue-700 p-2">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); viewDocument(${JSON.stringify(doc).replace(/"/g, '&quot;')})" 
+                                class="text-green-500 hover:text-green-700 p-2">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            documentsListContent.appendChild(docElement);
+        });
+    }
+    
+    // Mostrar modal
+    documentsModal.classList.remove('hidden');
+}
+
+// Función para cerrar modal de lista de documentos
+function closeDocumentsListModal() {
+    const documentsModal = document.getElementById('documentsListModal');
+    if (documentsModal) {
+        documentsModal.classList.add('hidden');
+    }
+}
+
+// Función para ver un documento específico
+function viewDocument(document) {
+    // Cerrar modal de lista
+    closeDocumentsListModal();
+    
+    // Mostrar el documento en el visor principal
+    document.getElementById('docType').textContent = document.nombre;
+    
+    // Construir URL del archivo desde Firebase Storage
+    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${document.ruta_archivo}?alt=media`;
+    
+    const iframe = document.getElementById('documentIframe');
+    iframe.src = fileUrl;
+    document.getElementById('documentPreviewContent').classList.remove('hidden');
+    document.getElementById('preview-placeholder').classList.add('hidden');
+}
+
+// Función para descargar documento
+function downloadDocument(documentId) {
+    fetch(`/api/documentos/${documentId}/download`)
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Error al descargar el documento');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `documento_${documentId}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            console.error('Error al descargar:', error);
+            alert('Error al descargar el documento');
+        });
+}
+
+// Función para obtener icono según tipo de archivo
+function getFileIcon(mimeType) {
+    if (!mimeType) return 'fa-file';
+    
+    if (mimeType.includes('pdf')) return 'fa-file-pdf';
+    if (mimeType.includes('image')) return 'fa-file-image';
+    if (mimeType.includes('word')) return 'fa-file-word';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'fa-file-excel';
+    
+    return 'fa-file';
+}
+
+// Función para formatear tamaño de archivo
+function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Función para mostrar un documento específico (función original mantenida para compatibilidad)
+function showDocument(documentId) {
+    fetch(`/api/documentos/${documentId}`)
+        .then(response => response.json())
+        .then(document => {
+            document.getElementById('docType').textContent = document.nombre_tipo_documento || document.nombre;
+            
+            // Mostrar el documento desde Firebase Storage
+            const iframe = document.getElementById('documentIframe');
+            iframe.src = document.url_archivo;
+            document.getElementById('documentPreviewContent').classList.remove('hidden');
+            document.getElementById('preview-placeholder').classList.add('hidden');
         });
 }
 
@@ -159,6 +304,7 @@ function showDocument(docId) {
 function closePropertyModal() {
     document.getElementById('propertyModal').classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
+    currentPropertyId = null;
 }
 
 // Funciones auxiliares para formatear datos
@@ -235,10 +381,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Cerrar modal de documentos al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        const documentsModal = document.getElementById('documentsListModal');
+        if (documentsModal && e.target === documentsModal) {
+            closeDocumentsListModal();
+        }
+    });
+    
     // Cerrar con tecla ESC
     document.addEventListener('keydown', function(e) {
         if(e.key === 'Escape') {
             closePropertyModal();
+            closeDocumentsListModal();
         }
     });
     
