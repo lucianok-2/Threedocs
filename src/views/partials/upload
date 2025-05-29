@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Documentos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .dropzone-active {
+            border-color: #3b82f6;
+            background-color: #f0f7ff;
+        }
+        .document-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .required-field::after {
+            content: "*";
+            color: #ef4444;
+            margin-left: 2px;
+        }
+        .category-title {
+            position: relative;
+            padding-left: 1.5rem;
+        }
+        .category-title::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 60%;
+            width: 4px;
+            background-color: #3b82f6;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+<div class="ml-64">
+    <div id="upload-documents" class="p-8">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Subir Documentos</h2>
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-500">Estado: </span>
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                    <i class="fas fa-circle mr-1"></i> Conectado
+                </span>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <!-- Selector de predio -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-home mr-2 text-blue-500"></i> Seleccionar Predio
+                </h3>
+                <div class="max-w-md">
+                    <label for="property-select" class="block text-gray-700 font-medium mb-2 required-field">Predio</label>
+                    <select id="property-select" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                        <option value="">Cargando predios...</option>
+                    </select>
+                    <p class="mt-2 text-sm text-gray-500">Seleccione un predio para ver los documentos disponibles</p>
+                </div>
+            </div>
+            
+            <!-- Sección de documentos (inicialmente oculta) -->
+            <div id="document-section" class="hidden">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-folder-open mr-2 text-blue-500"></i> Documentación
+                </h3>
+                
+                <!-- Categorías de documentos -->
+                <div class="space-y-8">
+                    <!-- Categoría 1: Documentos legales -->
+                    <div>
+                        <h4 class="category-title text-md font-semibold text-gray-700 mb-4">DOCUMENTOS LEGALES</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Los tipos de documentos se cargarán dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Categoría 2: Documentos de propiedad -->
+                    <div>
+                        <h4 class="category-title text-md font-semibold text-gray-700 mb-4">DOCUMENTOS DE PROPIEDAD</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Los tipos de documentos se cargarán dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Categoría 3: Documentos de seguridad -->
+                    <div>
+                        <h4 class="category-title text-md font-semibold text-gray-700 mb-4">SEGURIDAD Y SALUD</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Los tipos de documentos se cargarán dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Categoría 4: Otros documentos -->
+                    <div>
+                        <h4 class="category-title text-md font-semibold text-gray-700 mb-4">OTROS DOCUMENTOS</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Los tipos de documentos se cargarán dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para subir documentos -->
+        <div id="upload-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="border-b px-6 py-4 flex justify-between items-center sticky top-0 bg-white z-10">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center" id="modal-title">
+                        <i class="fas fa-cloud-upload-alt mr-2 text-blue-500"></i> 
+                        <span id="modal-title-text">Subir Documento</span>
+                    </h3>
+                    <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <form id="upload-form" class="p-6">
+                    <input type="hidden" id="document-type-id">
+                    <input type="hidden" id="property-id">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <!-- Columna izquierda -->
+                        <div>
+                            <div class="mb-4">
+                                <label for="document-name" class="block text-gray-700 font-medium mb-2 required-field">Nombre del Documento</label>
+                                <input type="text" id="document-name" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: Escritura pública No. 12345" required>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="document-number" class="block text-gray-700 font-medium mb-2">Número de Documento</label>
+                                <input type="text" id="document-number" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: 12345">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="document-date" class="block text-gray-700 font-medium mb-2">Fecha del Documento</label>
+                                <input type="date" id="document-date" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="document-description" class="block text-gray-700 font-medium mb-2">Descripción</label>
+                                <textarea id="document-description" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Descripción detallada del documento"></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Columna derecha -->
+                        <div>
+                            <div class="mb-4">
+                                <label for="document-entity" class="block text-gray-700 font-medium mb-2">Entidad Emisora</label>
+                                <input type="text" id="document-entity" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: Notaría 5 de Bogotá">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="document-responsible" class="block text-gray-700 font-medium mb-2 required-field">Responsable</label>
+                                <input type="text" id="document-responsible" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Nombre completo del responsable" required>
+                                <p class="mt-1 text-xs text-gray-500">Persona responsable de la veracidad del documento</p>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="document-contact" class="block text-gray-700 font-medium mb-2">Contacto del Responsable</label>
+                                <input type="text" id="document-contact" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Teléfono o correo">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="block text-gray-700 font-medium mb-2">Tipo de Documento</label>
+                                <div class="px-4 py-3 border rounded-lg bg-gray-50">
+                                    <span id="document-type-name" class="font-medium text-blue-600">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sección de archivo -->
+                    <div class="mb-6">
+                        <label class="block text-gray-700 font-medium mb-2 required-field">Archivo</label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors duration-200" id="dropzone">
+                            <input type="file" id="file-input" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" required>
+                            <div class="flex flex-col items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                <p class="mt-2 text-sm text-gray-600">Arrastre y suelte archivos aquí o</p>
+                                <button type="button" id="browse-files" class="mt-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 text-sm font-medium">
+                                    <i class="fas fa-search mr-2"></i>Buscar archivos
+                                </button>
+                                <p id="selected-file" class="mt-4 hidden">
+                                    <span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                                        <i class="fas fa-file-alt mr-1"></i>
+                                        <span id="file-name"></span>
+                                        <span id="file-size" class="text-gray-600 ml-2"></span>
+                                        <button type="button" id="remove-file" class="ml-2 text-blue-600 hover:text-blue-800">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </span>
+                                </p>
+                                <p class="mt-2 text-xs text-gray-500">
+                                    Formatos permitidos: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Tamaño máximo: 10MB)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center border-t pt-4">
+                        <div class="text-sm text-gray-500">
+                            <i class="fas fa-info-circle mr-1"></i> Todos los campos marcados con <span class="text-red-500">*</span> son obligatorios
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="button" id="cancel-upload" class="bg-gray-200 hover:grid-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center">
+                                <i class="fas fa-times mr-2"></i> Cancelar
+                            </button>
+                            <button type="submit" id="submit-upload" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center">
+                                <i class="fas fa-cloud-upload-alt mr-2"></i> Subir Documento
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Documentos específicos organizados por categorías
+    const DOCUMENT_TYPES = {
+        LEGALES: [
+            {id: 'CONSULTA_ANTECEDENTE', name: 'CONSULTA ANTECEDENTE BIEN RAIZ (SII)', icon: 'file-search', description: 'Consulta de antecedentes del bien raíz en el SII'},
+            {id: 'RESOLUCION_PLAN_MANEJO', name: 'RESOLUCIÓN PLAN DE MANEJO', icon: 'file-signature', description: 'Resolución que aprueba el plan de manejo del predio'},
+            {id: 'AVISO_EJECUCION_FAENA', name: 'AVISO EJECUCION DE FAENA', icon: 'bullhorn', description: 'Aviso de ejecución de faenas en el predio'},
+            {id: 'REGLAMENTO_INTERNO', name: 'REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD', icon: 'clipboard-list', description: 'Reglamento interno de seguridad y salud en el trabajo'}
+        ],
+        PROPIEDAD: [
+            {id: 'ESCRITURA_TITULOS', name: 'ESCRITURA O TITULOS DE DOMINIO', icon: 'file-contract', description: 'Documento que acredita la propiedad del predio'},
+            {id: 'CONTRATO_COMPRA_VENTA', name: 'CONTRATO COMPRA Y VENTA', icon: 'handshake', description: 'Contrato de compraventa del inmueble'},
+            {id: 'PLANO_PREDIO', name: 'PLANO DEL PREDIO', icon: 'map-marked-alt', description: 'Plano catastral o topográfico del predio'}
+        ],
+        SEGURIDAD: [
+            {id: 'CONTRATO_TRABAJO', name: 'CONTRATO DE TRABAJO', icon: 'file-alt', description: 'Contratos laborales del personal'},
+            {id: 'ENTREGA_EPP', name: 'ENTREGA EPP', icon: 'hard-hat', description: 'Registro de entrega de equipos de protección personal'},
+            {id: 'REGISTRO_CAPACITACION', name: 'REGISTRO DE CAPACITACIÓN', icon: 'chalkboard-teacher', description: 'Registros de capacitaciones al personal'}
+        ],
+        OTROS: [
+            {id: 'DERECHO_SABER', name: 'DERECHO A SABER', icon: 'info-circle', description: 'Documento que garantiza el derecho a la información'},
+            {id: 'VARIOS', name: 'VARIOS', icon: 'file-archive', description: 'Documentos varios no categorizados'},
+            {id: 'DOCTO_ADICIONAL', name: 'DOCTO. ADICIONAL', icon: 'file-plus', description: 'Documentación adicional complementaria'}
+        ]
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Simular carga de predios
+        const propertySelect = document.getElementById('property-select');
+        propertySelect.innerHTML = '';
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleccione un predio';
+        propertySelect.appendChild(defaultOption);
+        
+        const properties = [
+            {id: 1, name: 'Predio Las Acacias - Bogotá'},
+            {id: 2, name: 'Finca El Retiro - Medellín'},
+            {id: 3, name: 'Edificio Torre Central - Cali'},
+            {id: 4, name: 'Terreno La Esperanza - Barranquilla'}
+        ];
+        
+        properties.forEach(property => {
+            const option = document.createElement('option');
+            option.value = property.id;
+            option.textContent = property.name;
+            propertySelect.appendChild(option);
+        });
+        
+        // Simular carga de tipos de documentos al seleccionar un predio
+        propertySelect.addEventListener('change', function() {
+            const documentSection = document.getElementById('document-section');
+            const documentTypesContainer = document.querySelectorAll('#document-section .grid');
+            
+            if(this.value) {
+                documentSection.classList.remove('hidden');
+                
+                // Limpiar contenedores
+                documentTypesContainer.forEach(container => container.innerHTML = '');
+                
+                // Cargar documentos legales
+                const legalContainer = documentTypesContainer[0];
+                DOCUMENT_TYPES.LEGALES.forEach(docType => {
+                    legalContainer.appendChild(createDocumentCard(docType));
+                });
+                
+                // Cargar documentos de propiedad
+                const propertyContainer = documentTypesContainer[1];
+                DOCUMENT_TYPES.PROPIEDAD.forEach(docType => {
+                    propertyContainer.appendChild(createDocumentCard(docType));
+                });
+                
+                // Cargar documentos de seguridad
+                const securityContainer = documentTypesContainer[2];
+                DOCUMENT_TYPES.SEGURIDAD.forEach(docType => {
+                    securityContainer.appendChild(createDocumentCard(docType));
+                });
+                
+                // Cargar otros documentos
+                const othersContainer = documentTypesContainer[3];
+                DOCUMENT_TYPES.OTROS.forEach(docType => {
+                    othersContainer.appendChild(createDocumentCard(docType));
+                });
+            } else {
+                documentSection.classList.add('hidden');
+            }
+        });
+        
+        // Función para crear tarjetas de documentos
+        function createDocumentCard(docType) {
+            const card = document.createElement('div');
+            card.className = 'document-card bg-white border rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer';
+            card.innerHTML = `
+                <div class="flex items-start">
+                    <div class="bg-blue-100 p-3 rounded-full mr-4">
+                        <i class="fas fa-${docType.icon} text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">${docType.name}</h4>
+                        <p class="text-sm text-gray-500 mt-1">${docType.description}</p>
+                        <button class="mt-3 text-sm text-blue-600 hover:text-blue-800 font-medium upload-btn" 
+                                data-id="${docType.id}" 
+                                data-name="${docType.name}">
+                            <i class="fas fa-plus mr-1"></i> Subir documento
+                        </button>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+        
+        // Manejo del modal de subida
+        const uploadModal = document.getElementById('upload-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelUploadBtn = document.getElementById('cancel-upload');
+        const browseFilesBtn = document.getElementById('browse-files');
+        const fileInput = document.getElementById('file-input');
+        const dropzone = document.getElementById('dropzone');
+        const selectedFile = document.getElementById('selected-file');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const removeFileBtn = document.getElementById('remove-file');
+        const documentTypeId = document.getElementById('document-type-id');
+        const propertyId = document.getElementById('property-id');
+        const documentTypeName = document.getElementById('document-type-name');
+        const modalTitleText = document.getElementById('modal-title-text');
+        
+        // Abrir modal al hacer clic en "Subir documento"
+        document.addEventListener('click', function(e) {
+            if(e.target.classList.contains('upload-btn') || e.target.closest('.upload-btn')) {
+                const btn = e.target.classList.contains('upload-btn') ? e.target : e.target.closest('.upload-btn');
+                documentTypeId.value = btn.dataset.id;
+                documentTypeName.textContent = btn.dataset.name;
+                modalTitleText.textContent = `Subir ${btn.dataset.name}`;
+                propertyId.value = propertySelect.value;
+                uploadModal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+                
+                // Configurar campos específicos según el tipo de documento
+                configureDocumentFields(btn.dataset.id);
+            }
+        });
+        
+        // Configurar campos específicos según el tipo de documento
+        function configureDocumentFields(docTypeId) {
+            const docNameInput = document.getElementById('document-name');
+            const docNumberInput = document.getElementById('document-number');
+            const docDateInput = document.getElementById('document-date');
+            const docEntityInput = document.getElementById('document-entity');
+            
+            // Resetear placeholders
+            docNameInput.placeholder = "Nombre del documento";
+            docNumberInput.placeholder = "Número del documento";
+            docEntityInput.placeholder = "Entidad emisora";
+            
+            // Configurar según tipo de documento
+            switch(docTypeId) {
+                case 'CONSULTA_ANTECEDENTE':
+                    docNameInput.placeholder = "Ej: Consulta antecedentes predio XYZ";
+                    docNumberInput.placeholder = "Ej: N° de folio SII";
+                    docEntityInput.placeholder = "Ej: Servicio de Impuestos Internos";
+                    break;
+                case 'RESOLUCION_PLAN_MANEJO':
+                    docNameInput.placeholder = "Ej: Resolución Plan Manejo Ambiental";
+                    docNumberInput.placeholder = "Ej: Resolución N° 123-2023";
+                    docEntityInput.placeholder = "Ej: Ministerio de Ambiente";
+                    break;
+                case 'ESCRITURA_TITULOS':
+                    docNameInput.placeholder = "Ej: Escritura Pública N° 12345";
+                    docNumberInput.placeholder = "Ej: N° de escritura";
+                    docEntityInput.placeholder = "Ej: Notaría 5 de Bogotá";
+                    break;
+                case 'CONTRATO_COMPRA_VENTA':
+                    docNameInput.placeholder = "Ej: Contrato Compraventa Predio ABC";
+                    docNumberInput.placeholder = "Ej: Contrato N° 456-2023";
+                    docEntityInput.placeholder = "Ej: Notaría 10 de Medellín";
+                    break;
+                case 'PLANO_PREDIO':
+                    docNameInput.placeholder = "Ej: Plano Catastral Predio XYZ";
+                    docNumberInput.placeholder = "Ej: Plano N° 789";
+                    docEntityInput.placeholder = "Ej: Oficina de Catastro";
+                    break;
+                case 'REGLAMENTO_INTERNO':
+                    docNameInput.placeholder = "Ej: Reglamento Interno Seguridad";
+                    docNumberInput.placeholder = "Ej: Versión 2.0";
+                    docEntityInput.placeholder = "Ej: Departamento de Seguridad";
+                    break;
+            }
+        }
+        
+        // Cerrar modal
+        function closeModal() {
+            uploadModal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            // Resetear formulario
+            document.getElementById('upload-form').reset();
+            selectedFile.classList.add('hidden');
+            dropzone.classList.remove('dropzone-active');
+        }
+        
+        closeModalBtn.addEventListener('click', closeModal);
+        cancelUploadBtn.addEventListener('click', closeModal);
+        
+        // Drag and drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropzone.classList.add('dropzone-active');
+        }
+        
+        function unhighlight() {
+            dropzone.classList.remove('dropzone-active');
+        }
+        
+        dropzone.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+        
+        browseFilesBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', function() {
+            handleFiles(this.files);
+        });
+        
+        function handleFiles(files) {
+            if(files.length > 0) {
+                const file = files[0];
+                const fileSizeMB = (file.size / (1024*1024)).toFixed(2);
+                
+                // Validar tamaño máximo (10MB)
+                if(file.size > 10 * 1024 * 1024) {
+                    alert('El archivo es demasiado grande. El tamaño máximo permitido es 10MB.');
+                    return;
+                }
+                
+                // Validar tipo de archivo
+                const validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                
+                if(!validExtensions.includes(fileExt)) {
+                    alert('Tipo de archivo no permitido. Por favor suba un archivo con una extensión válida.');
+                    return;
+                }
+                
+                fileName.textContent = file.name;
+                fileSize.textContent = `${fileSizeMB} MB`;
+                selectedFile.classList.remove('hidden');
+            }
+        }
+        
+        removeFileBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fileInput.value = '';
+            selectedFile.classList.add('hidden');
+        });
+        
+        // Manejar envío del formulario
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validar que se haya seleccionado un archivo
+            if(!fileInput.files || fileInput.files.length === 0) {
+                alert('Por favor seleccione un archivo para subir');
+                return;
+            }
+            
+            // Validar que el responsable esté completo
+            const responsible = document.getElementById('document-responsible').value.trim();
+            if(!responsible) {
+                alert('Por favor ingrese el nombre del responsable');
+                return;
+            }
+            
+            // Aquí iría la lógica para subir el archivo y los metadatos
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('property_id', propertyId.value);
+            formData.append('document_type_id', documentTypeId.value);
+            formData.append('name', document.getElementById('document-name').value);
+            formData.append('number', document.getElementById('document-number').value);
+            formData.append('date', document.getElementById('document-date').value);
+            formData.append('description', document.getElementById('document-description').value);
+            formData.append('entity', document.getElementById('document-entity').value);
+            formData.append('responsible', responsible);
+            formData.append('contact', document.getElementById('document-contact').value);
+            
+            // Simular envío al servidor
+            console.log('Datos a enviar:', Object.fromEntries(formData));
+            
+            // Mostrar mensaje de éxito
+            alert('Documento subido exitosamente');
+            closeModal();
+        });
+    });
+</script>
+</body>
+</html>

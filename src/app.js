@@ -3,13 +3,69 @@ const { engine } = require('express-handlebars');
 const morgan = require('morgan');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const { admin, db } = require('./firebase');
+const { admin, db , storage} = require('./firebase');
 const cookieParser = require('cookie-parser'); 
+const multer = require('multer');
+const fs = require('fs');
+const crypto = require('crypto');
+const cors = require('cors');
 require('dotenv').config();
 const app = express();
 
+
+
+// Configurar multer para almacenar archivos temporalmente
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: function (req, file, cb) {
+      const tempDir = path.join(__dirname, 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      cb(null, tempDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // Límite de 10MB
+  },
+  fileFilter: function (req, file, cb) {
+    // Permitir PDF, JPG, JPEG y otros formatos comunes
+    const allowedMimes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo de archivo no permitido. Solo se permiten PDF, imágenes y documentos de Office.'));
+    }
+  }
+});
+
 // Handlebars (debe ir antes de usar res.render)
-app.engine('handlebars', engine());
+app.engine('handlebars', engine({
+  // Definir layouts diferentes según la ruta
+  defaultLayout: 'main',
+  helpers: {
+    // Helper para determinar qué layout usar
+    section: function(name, options) {
+      if (!this._sections) this._sections = {};
+      this._sections[name] = options.fn(this);
+      return null;
+    }
+  }
+}));
 app.set('view engine', 'handlebars');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -23,6 +79,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Rutas importadas
 const authRoutes = require('./routes/auth.js');
 app.use('/auth', authRoutes);
+
+// Importar y usar las rutas de predios
+const propertiesRoutes = require('./routes/properties.js');
+app.use('/api/predios', propertiesRoutes);
+
+// Importar y usar las rutas de documentos
+const documentsRoutes = require('./routes/documents.js');
+app.use('/api/documentos', documentsRoutes);
 
 // Middleware para verificar token
 function verificarToken(req, res, next) {
@@ -56,26 +120,94 @@ app.get('/firebase-config.js', (req, res) => {
   const config = {
     apiKey: process.env.FIREBASE_API_KEY,
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET // Nueva propiedad para Storage
   };
   res.type('application/javascript');
   res.send(`window.firebaseConfig = ${JSON.stringify(config)}`);
 });
 
 
-app.get('/', (req, res) => res.render('login'));
+app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
+app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
 
-// Agregar esta nueva ruta para el registro
-app.get('/register', (req, res) => res.render('register'));
-
-// Rutas protegidas
+// Rutas protegidas con layout principal (incluye sidebar)
 app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;
     res.render('upload', { usuario: req.usuario, propertyId: propertyId });
 });
+
+// Agregar ruta POST para manejar la subida de documentos
+app.post('/upload', verificarToken, upload.single('documentFile'), async (req, res) => {
+    try {
+        // Verificar que se haya subido un archivo
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+        }
+        
+        // Verificar que se hayan enviado todos los datos necesarios
+        if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId) {
+            // Eliminar el archivo temporal
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'Faltan datos requeridos' });
+        }
+        
+        // Leer el archivo
+        const fileBuffer = fs.readFileSync(req.file.path);
+        
+        // Generar hash SHA-256 del archivo
+        const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+        
+        // Guardar el archivo en el sistema de archivos
+        const uploadDir = path.join(__dirname, '../uploads', req.usuario.uid, req.body.propertyId);
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        
+        const fileName = `${Date.now()}_${path.basename(req.file.originalname)}`;
+        const filePath = path.join(uploadDir, fileName);
+        
+        fs.writeFileSync(filePath, fileBuffer);
+        
+        // Crear el documento en la base de datos
+        const documentData = {
+            nombre: req.body.documentName,
+            id_predio: req.body.propertyId,
+            id_user: req.usuario.uid,
+            tipo_documento: parseInt(req.body.documentTypeId),
+            fecha_subida: new Date(),
+            ruta_archivo: `/uploads/${req.usuario.uid}/${req.body.propertyId}/${fileName}`,
+            hash: fileHash,
+            tipo_archivo: req.file.mimetype,
+            tamano: req.file.size
+        };
+        
+        const docRef = await db.collection('documentos').add(documentData);
+        
+        // Eliminar el archivo temporal
+        fs.unlinkSync(req.file.path);
+        
+        res.status(201).json({
+            _id: docRef.id,
+            ...documentData
+        });
+    } catch (error) {
+        console.error('Error al subir documento:', error);
+        
+        // Eliminar el archivo temporal si existe
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        
+        res.status(500).json({ error: 'Error al subir el documento' });
+    }
+});
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
+
+// Ruta para la galería de documentos
+app.get('/galery', verificarToken, (req, res) => res.render('galery', { usuario: req.usuario }));
 
 // Ruta para cerrar sesión
 app.get('/logout', (req, res) => { 

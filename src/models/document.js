@@ -1,66 +1,71 @@
 const { db } = require('../firebase');
 
-// Tipos de documentos
+
+
+// Constantes para tipos de documentos (puedes regenerarlas o ajustarlas si es necesario)
 const DOCUMENT_TYPES = {
-  CONSULTA_ANTECEDENTE: '1. CONSULTA ANTECEDENTE BIEN RAIZ (SII)',
-  RESOLUCION_PLAN_MANEJO: '2. RESOLUCIÓN PLAN DE MANEJO',
-  AVISO_EJECUCION_FAENA: '3. AVISO EJECUCION DE FAENA',
-  ESCRITURA_TITULOS: '4. ESCRITURA O TITULOS DE DOMINIO',
-  CONTRATO_COMPRA_VENTA: '6. CONTRATO COMPRA Y VENTA',
-  PLANO_PREDIO: '7. PLANO DEL PREDIO',
-  CONTRATO_TRABAJO: '8. CONTRATO DE TRABAJO',
-  DERECHO_SABER: '9. DERECHO A SABER',
-  ENTREGA_EPP: '10. ENTREGA EPP',
-  VARIOS: '11. VARIOS',
-  REGLAMENTO_INTERNO: '12. REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD',
-  REGISTRO_CAPACITACION: '13. REGISTRO DE CAPACITACIÓN',
-  DOCTO_ADICIONAL: '14. DOCTO. ADICIONAL'
+    CONSULTA_ANTECEDENTE: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)",
+    RESOLUCION_PLAN_MANEJO: "RESOLUCIÓN PLAN DE MANEJO",
+    AVISO_EJECUCION_FAENA: "AVISO EJECUCION DE FAENA",
+    ESCRITURA_TITULOS: "ESCRITURA O TITULOS DE DOMINIO",
+    CONTRATO_COMPRA_VENTA: "CONTRATO COMPRA Y VENTA",
+    PLANO_PREDIO: "PLANO DEL PREDIO",
+    CONTRATO_TRABAJO: "CONTRATO DE TRABAJO",
+    DERECHO_SABER: "DERECHO A SABER",
+    ENTREGA_EPP: "ENTREGA EPP",
+    VARIOS: "VARIOS",
+    REGLAMENTO_INTERNO: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD",
+    REGISTRO_CAPACITACION: "REGISTRO DE CAPACITACIÓN",
+    DOCTO_ADICIONAL: "DOCTO. ADICIONAL"
 };
 
-// Colección de documentos
-const documentsCollection = db.collection('documents');
+// Colección de documentos en Firebase
+const documentsCollection = db.collection('documents'); // Usaremos 'documents'
 
-// Funciones para manejar documentos
+// Funciones para manejar documentos en Firebase
 const documentModel = {
-  // Obtener todos los documentos
-  getAllDocuments: async () => {
+  // Obtener todos los documentos (podrías necesitar filtros para userId, projectId)
+  getAllProcessedDocuments: async (userId, projectId) => {
     try {
-      const snapshot = await documentsCollection.get();
+      let query = documentsCollection;
+      if (userId) {
+        query = query.where('userId', '==', userId);
+      }
+      if (projectId) {
+        query = query.where('projectId', '==', projectId);
+      }
+      const snapshot = await query.orderBy('uploadDate', 'desc').get();
       return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error al obtener documentos:', error);
+      console.error('Error al obtener documentos procesados:', error);
       throw error;
     }
   },
 
-  // Obtener documentos por predio
-  getDocumentsByProperty: async (propertyId) => {
+  getProcessedDocumentById: async (documentId) => {
     try {
-      const snapshot = await documentsCollection
-        .where('propertyId', '==', propertyId)
-        .get();
-      
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const docRef = documentsCollection.doc(documentId);
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return null;
+      }
+      return { id: doc.id, ...doc.data() };
     } catch (error) {
-      console.error('Error al obtener documentos por predio:', error);
+      console.error('Error al obtener documento por ID:', error);
       throw error;
     }
   },
 
-  // Agregar un nuevo documento
-  addDocument: async (documentData) => {
+  // Agregar un nuevo documento (adaptado para el nuevo schema)
+  addProcessedDocument: async (documentData) => {
     try {
-      // Agregar timestamp de creación
       const docWithTimestamp = {
         ...documentData,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        uploadDate: new Date(),
+        status: 'uploaded', // Estado inicial
       };
       
       const docRef = await documentsCollection.add(docWithTimestamp);
@@ -69,51 +74,59 @@ const documentModel = {
         ...docWithTimestamp
       };
     } catch (error) {
-      console.error('Error al agregar documento:', error);
+      console.error('Error al agregar documento procesado:', error);
       throw error;
     }
   },
 
-  // Actualizar un documento existente
-  updateDocument: async (documentId, documentData) => {
+  // Actualizar un documento existente (para OCR, ediciones manuales, etc.)
+  updateProcessedDocument: async (documentId, dataToUpdate) => {
     try {
       const docRef = documentsCollection.doc(documentId);
-      
-      // Agregar timestamp de actualización
-      const docWithTimestamp = {
-        ...documentData,
-        updatedAt: new Date()
+      const updateData = {
+        ...dataToUpdate,
+        // Si 'processedDate' se establece al completar OCR, agrégalo aquí condicionalmente
+        // Si 'status' cambia, también se actualiza aquí
       };
+      if (dataToUpdate.status === 'processed' && !dataToUpdate.processedDate) {
+        updateData.processedDate = new Date();
+      }
       
-      await docRef.update(docWithTimestamp);
+      await docRef.update(updateData);
+      const updatedDoc = await docRef.get();
       return {
         id: documentId,
-        ...docWithTimestamp
+        ...updatedDoc.data()
       };
     } catch (error) {
-      console.error('Error al actualizar documento:', error);
+      console.error('Error al actualizar documento procesado:', error);
       throw error;
     }
   },
 
   // Eliminar un documento
-  deleteDocument: async (documentId) => {
+  deleteProcessedDocument: async (documentId) => {
     try {
       await documentsCollection.doc(documentId).delete();
+      // Aquí también deberías eliminar el archivo físico de /uploads
       return { id: documentId, deleted: true };
     } catch (error) {
-      console.error('Error al eliminar documento:', error);
+      console.error('Error al eliminar documento procesado:', error);
       throw error;
     }
   },
 
   // Obtener tipos de documentos
   getDocumentTypes: () => {
-    return DOCUMENT_TYPES;
-  }
+    return documentTypes; // Retorna la lista actualizada
+  },
+
+  
 };
 
 module.exports = {
   documentModel,
-  DOCUMENT_TYPES
+  DOCUMENT_TYPES, // Puede que necesites actualizar esto también
+  documentTypes,
+  
 };
