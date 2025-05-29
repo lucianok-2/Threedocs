@@ -156,42 +156,50 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
   }
 });
 
-// Guardar metadatos de documento subido desde el frontend
+// Ruta para guardar metadatos de documentos (sin guardar archivos localmente)
 router.post('/upload', async (req, res) => {
   try {
-    const {
-      documentName,
-      documentTypeId,
-      propertyId,
-      responsiblePerson,
-      documentDate,
-      documentDescription,
-      fileHash,
-      userId,
-      uploadDate,
-      fileUrl // <-- la URL de Storage
-    } = req.body;
-
+    // Verificar que se hayan enviado todos los datos necesarios
+    if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId || !req.body.fileUrl) {
+      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+    
+    // Verificar que el predio exista
+    const predioRef = db.collection('predios').doc(req.body.propertyId);
+    const predioDoc = await predioRef.get();
+    
+    if (!predioDoc.exists) {
+      return res.status(404).json({ error: 'El predio no existe' });
+    }
+    
+    const predioData = predioDoc.data();
+    
+    // Verificar que el predio pertenezca al usuario actual
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
+    }
+    
+    // Crear el documento en la base de datos usando la URL de Firebase Storage
     const documentData = {
-      nombre: documentName,
-      id_predio: propertyId,
-      id_user: userId,
-      tipo_documento: parseInt(documentTypeId),
-      fecha_subida: uploadDate ? new Date(uploadDate) : new Date(),
-      responsable: responsiblePerson,
-      descripcion: documentDescription,
-      hash: fileHash,
-      url_archivo: fileUrl
+      nombre: req.body.documentName,
+      id_predio: req.body.propertyId,
+      id_user: req.usuario.uid,
+      tipo_documento: parseInt(req.body.documentTypeId),
+      fecha_subida: new Date(),
+      url_archivo: req.body.fileUrl, // URL de Firebase Storage
+      hash: req.body.fileHash || '',
+      tipo_archivo: req.body.fileType || '',
+      tamano: req.body.fileSize || 0
     };
-
+    
     const docRef = await db.collection('documentos').add(documentData);
-
+    
     res.status(201).json({
       _id: docRef.id,
       ...documentData
     });
   } catch (error) {
-    console.error('Error al guardar metadatos:', error);
+    console.error('Error al guardar metadatos del documento:', error);
     res.status(500).json({ error: 'Error al guardar los metadatos del documento' });
   }
 });

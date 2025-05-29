@@ -17,7 +17,7 @@ try {
   // Inicializar Firebase Admin con el objeto de credenciales
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: 'sg://threedocs-4b9cc.firebasestorage.app' // o el bucket correcto
+    storageBucket: 'gs://threedocs-4b9cc.firebasestorage.app' // o el bucket correcto
   });
   
   const db = admin.firestore();
