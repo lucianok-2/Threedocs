@@ -16,13 +16,16 @@ try {
   
   // Inicializar Firebase Admin con el objeto de credenciales
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
+    storageBucket: 'sg://threedocs-4b9cc.firebasestorage.app' // o el bucket correcto
   });
   
   const db = admin.firestore();
-  console.log('✅ Firebase Admin SDK inicializado correctamente');
+  const storage = admin.storage();
   
-  module.exports = { admin, db };
+  module.exports = { admin, db, storage };
+  console.log('✅ Firebase Admin SDK inicializado correctamente');
+  // Eliminar esta línea: module.exports = { admin, db };
 } catch (error) {
   console.error('Error al inicializar Firebase Admin SDK:', error);
   process.exit(1); // Detener la aplicación si hay un error en la inicialización

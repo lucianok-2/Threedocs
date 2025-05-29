@@ -3,13 +3,16 @@ const { engine } = require('express-handlebars');
 const morgan = require('morgan');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const { admin, db } = require('./firebase');
+const { admin, db , storage} = require('./firebase');
 const cookieParser = require('cookie-parser'); 
 const multer = require('multer');
 const fs = require('fs');
 const crypto = require('crypto');
+const cors = require('cors');
 require('dotenv').config();
 const app = express();
+
+
 
 // Configurar multer para almacenar archivos temporalmente
 const upload = multer({
@@ -117,7 +120,8 @@ app.get('/firebase-config.js', (req, res) => {
   const config = {
     apiKey: process.env.FIREBASE_API_KEY,
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET // Nueva propiedad para Storage
   };
   res.type('application/javascript');
   res.send(`window.firebaseConfig = ${JSON.stringify(config)}`);

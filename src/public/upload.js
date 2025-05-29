@@ -332,10 +332,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
       try {
         // Subir a Firebase Storage
-        const storageRef = firebase.storage().ref();
+        // La configuración ya está disponible en window.firebaseConfig
+        const app = firebase.initializeApp(window.firebaseConfig);
+        const storage = firebase.storage();
+        // Usa el método ref() en lugar de bucket()
+        const storageRef = storage.ref();
         const fileRef = storageRef.child(`documents/${propertyId.value}/${hashHex}/${file.name}`);
         
-        // Mostrar progreso de subida
+        // Y luego usa put() para subir el archivo
         const uploadTask = fileRef.put(file);
         
         uploadTask.on('state_changed', 

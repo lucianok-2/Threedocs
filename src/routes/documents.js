@@ -156,4 +156,44 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
   }
 });
 
+// Guardar metadatos de documento subido desde el frontend
+router.post('/upload', async (req, res) => {
+  try {
+    const {
+      documentName,
+      documentTypeId,
+      propertyId,
+      responsiblePerson,
+      documentDate,
+      documentDescription,
+      fileHash,
+      userId,
+      uploadDate,
+      fileUrl // <-- la URL de Storage
+    } = req.body;
+
+    const documentData = {
+      nombre: documentName,
+      id_predio: propertyId,
+      id_user: userId,
+      tipo_documento: parseInt(documentTypeId),
+      fecha_subida: uploadDate ? new Date(uploadDate) : new Date(),
+      responsable: responsiblePerson,
+      descripcion: documentDescription,
+      hash: fileHash,
+      url_archivo: fileUrl
+    };
+
+    const docRef = await db.collection('documentos').add(documentData);
+
+    res.status(201).json({
+      _id: docRef.id,
+      ...documentData
+    });
+  } catch (error) {
+    console.error('Error al guardar metadatos:', error);
+    res.status(500).json({ error: 'Error al guardar los metadatos del documento' });
+  }
+});
+
 module.exports = router;

@@ -135,14 +135,7 @@
 
 <!-- Manteniendo las mismas referencias a JS -->
 <script src="/js/modals.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
 <script src="/firebase-config.js"></script>
-<script>
-  if (window.firebaseConfig) {
-    firebase.initializeApp(window.firebaseConfig);
-  } else {
-    alert('No se encontró la configuración de Firebase');
-  }
-</script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 <script src="/upload.js"></script>
