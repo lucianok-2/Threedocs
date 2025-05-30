@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { db } = require('../firebase');
+const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
 
 // Middleware para verificar token
@@ -111,16 +111,31 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     // Generar hash SHA-256 del archivo
     const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
     
-    // Guardar el archivo en el sistema de archivos
-    const uploadDir = path.join(__dirname, '../../uploads', req.usuario.uid, req.body.propertyId);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    
+    // Generar nombre único para el archivo
     const fileName = `${Date.now()}_${path.basename(req.file.originalname)}`;
-    const filePath = path.join(uploadDir, fileName);
+    const filePath = `documentos/${req.usuario.uid}/${req.body.propertyId}/${fileName}`;
     
-    fs.writeFileSync(filePath, fileBuffer);
+    // Subir archivo a Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(filePath);
+    
+    await file.save(fileBuffer, {
+      metadata: {
+        contentType: req.file.mimetype,
+        metadata: {
+          originalName: req.file.originalname,
+          uploadedBy: req.usuario.uid,
+          propertyId: req.body.propertyId,
+          documentType: req.body.documentTypeId
+        }
+      }
+    });
+    
+    // Generar URL de descarga
+    const [downloadURL] = await file.getSignedUrl({
+      action: 'read',
+      expires: '03-09-2491' // Fecha muy lejana para URL permanente
+    });
     
     // Crear el documento en la base de datos
     const documentData = {
@@ -129,10 +144,14 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
       id_user: req.usuario.uid,
       tipo_documento: parseInt(req.body.documentTypeId),
       fecha_subida: new Date(),
-      ruta_archivo: `/uploads/${req.usuario.uid}/${req.body.propertyId}/${fileName}`,
+      fecha_creacion: new Date(),
+      ruta_archivo: filePath,
+      url_archivo: downloadURL,
       hash: fileHash,
       tipo_archivo: req.file.mimetype,
-      tamano: req.file.size
+      tamano: req.file.size,
+      nombre_original: req.file.originalname,
+      estado: 'completo'
     };
     
     const docRef = await db.collection('documentos').add(documentData);
@@ -156,51 +175,265 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
   }
 });
 
-// Ruta para guardar metadatos de documentos (sin guardar archivos localmente)
-router.post('/upload', async (req, res) => {
+// Ruta para buscar documentos por filtros
+router.get('/buscar', async (req, res) => {
   try {
-    // Verificar que se hayan enviado todos los datos necesarios
-    if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId || !req.body.fileUrl) {
-      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    const { tipo_documento, id_predio } = req.query;
+    
+    let query = db.collection('documentos')
+      .where('id_user', '==', req.usuario.uid);
+    
+    if (tipo_documento) {
+      query = query.where('tipo_documento', '==', parseInt(tipo_documento));
     }
     
-    // Verificar que el predio exista
-    const predioRef = db.collection('predios').doc(req.body.propertyId);
-    const predioDoc = await predioRef.get();
-    
-    if (!predioDoc.exists) {
-      return res.status(404).json({ error: 'El predio no existe' });
+    if (id_predio) {
+      query = query.where('id_predio', '==', id_predio);
     }
     
-    const predioData = predioDoc.data();
+    const snapshot = await query.get();
+    const documentos = [];
     
-    // Verificar que el predio pertenezca al usuario actual
-    if (predioData.id_user !== req.usuario.uid) {
-      return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
+    snapshot.forEach(doc => {
+      documentos.push({
+        _id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Ordenar por fecha de subida (más recientes primero)
+    documentos.sort((a, b) => {
+      const dateA = a.fecha_subida ? a.fecha_subida.toDate() : new Date(0);
+      const dateB = b.fecha_subida ? b.fecha_subida.toDate() : new Date(0);
+      return dateB - dateA;
+    });
+    
+    res.json(documentos);
+  } catch (error) {
+    console.error('Error al buscar documentos:', error);
+    res.status(500).json({ error: 'Error al buscar documentos' });
+  }
+});
+
+// Ruta para obtener un documento específico
+router.get('/:id', async (req, res) => {
+  try {
+    const docRef = db.collection('documentos').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
     }
     
-    // Crear el documento en la base de datos usando la URL de Firebase Storage
-    const documentData = {
-      nombre: req.body.documentName,
-      id_predio: req.body.propertyId,
-      id_user: req.usuario.uid,
-      tipo_documento: parseInt(req.body.documentTypeId),
-      fecha_subida: new Date(),
-      url_archivo: req.body.fileUrl, // URL de Firebase Storage
-      hash: req.body.fileHash || '',
-      tipo_archivo: req.body.fileType || '',
-      tamano: req.body.fileSize || 0
-    };
+    const documentData = doc.data();
     
-    const docRef = await db.collection('documentos').add(documentData);
+    // Verificar que el documento pertenezca al usuario
+    if (documentData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para acceder a este documento' });
+    }
     
-    res.status(201).json({
-      _id: docRef.id,
+    // Si no tiene URL, generarla
+    if (!documentData.url_archivo && documentData.ruta_archivo) {
+      try {
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(documentData.ruta_archivo);
+        
+        const [downloadURL] = await file.getSignedUrl({
+          action: 'read',
+          expires: '03-09-2491'
+        });
+        
+        // Actualizar el documento con la URL
+        await docRef.update({ url_archivo: downloadURL });
+        documentData.url_archivo = downloadURL;
+      } catch (urlError) {
+        console.error('Error al generar URL:', urlError);
+      }
+    }
+    
+    res.json({
+      _id: doc.id,
       ...documentData
     });
   } catch (error) {
-    console.error('Error al guardar metadatos del documento:', error);
-    res.status(500).json({ error: 'Error al guardar los metadatos del documento' });
+    console.error('Error al obtener documento:', error);
+    res.status(500).json({ error: 'Error al obtener el documento' });
+  }
+});
+
+// Ruta para descargar un documento
+router.get('/:id/download', async (req, res) => {
+  try {
+    const docRef = db.collection('documentos').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    
+    const documentData = doc.data();
+    
+    // Verificar que el documento pertenezca al usuario
+    if (documentData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para descargar este documento' });
+    }
+    
+    if (!documentData.ruta_archivo) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+    
+    // Obtener el archivo desde Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(documentData.ruta_archivo);
+    
+    // Verificar que el archivo existe
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado en el almacenamiento' });
+    }
+    
+    // Configurar headers para descarga
+    res.setHeader('Content-Disposition', `attachment; filename="${documentData.nombre_original || 'documento'}"`);
+    res.setHeader('Content-Type', documentData.tipo_archivo || 'application/octet-stream');
+    
+    // Stream del archivo
+    const stream = file.createReadStream();
+    stream.pipe(res);
+    
+    stream.on('error', (error) => {
+      console.error('Error al descargar archivo:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error al descargar el archivo' });
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error al descargar documento:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al descargar el documento' });
+    }
+  }
+});
+
+// Ruta para eliminar un documento
+router.delete('/:id', async (req, res) => {
+  try {
+    const docRef = db.collection('documentos').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    
+    const documentData = doc.data();
+    
+    // Verificar que el documento pertenezca al usuario
+    if (documentData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar este documento' });
+    }
+    
+    // Eliminar archivo de Firebase Storage
+    if (documentData.ruta_archivo) {
+      try {
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(documentData.ruta_archivo);
+        await file.delete();
+      } catch (storageError) {
+        console.error('Error al eliminar archivo de storage:', storageError);
+        // Continuar con la eliminación del documento aunque falle el storage
+      }
+    }
+    
+    // Eliminar documento de Firestore
+    await docRef.delete();
+    
+    res.json({ message: 'Documento eliminado exitosamente' });
+  } catch (error) {
+    console.error('Error al eliminar documento:', error);
+    res.status(500).json({ error: 'Error al eliminar el documento' });
+  }
+});
+
+// Ruta para obtener documentos de un predio específico
+router.get('/predio/:predioId', async (req, res) => {
+  try {
+    const { predioId } = req.params;
+    
+    // Verificar que el predio pertenezca al usuario
+    const predioRef = db.collection('predios').doc(predioId);
+    const predioDoc = await predioRef.get();
+    
+    if (!predioDoc.exists) {
+      return res.status(404).json({ error: 'Predio no encontrado' });
+    }
+    
+    const predioData = predioDoc.data();
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para acceder a los documentos de este predio' });
+    }
+    
+    // Obtener documentos del predio
+    const snapshot = await db.collection('documentos')
+      .where('id_predio', '==', predioId)
+      .where('id_user', '==', req.usuario.uid)
+      .get();
+    
+    const documentos = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      documentos.push({
+        _id: doc.id,
+        ...data,
+        fecha_subida: data.fecha_subida ? data.fecha_subida.toDate() : null,
+        fecha_creacion: data.fecha_creacion ? data.fecha_creacion.toDate() : null
+      });
+    });
+    
+    // Ordenar por fecha de subida (más recientes primero)
+    documentos.sort((a, b) => {
+      const dateA = a.fecha_subida || new Date(0);
+      const dateB = b.fecha_subida || new Date(0);
+      return dateB - dateA;
+    });
+    
+    res.json(documentos);
+  } catch (error) {
+    console.error('Error al obtener documentos del predio:', error);
+    res.status(500).json({ error: 'Error al obtener los documentos del predio' });
+  }
+});
+
+// Ruta para actualizar un documento
+router.put('/:id', async (req, res) => {
+  try {
+    const { nombre, estado } = req.body;
+    const docRef = db.collection('documentos').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    
+    const documentData = doc.data();
+    
+    // Verificar que el documento pertenezca al usuario
+    if (documentData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este documento' });
+    }
+    
+    const updateData = {
+      fecha_modificacion: new Date()
+    };
+    
+    if (nombre) updateData.nombre = nombre;
+    if (estado) updateData.estado = estado;
+    
+    await docRef.update(updateData);
+    
+    res.json({ message: 'Documento actualizado exitosamente' });
+  } catch (error) {
+    console.error('Error al actualizar documento:', error);
+    res.status(500).json({ error: 'Error al actualizar el documento' });
   }
 });
 
