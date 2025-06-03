@@ -10,18 +10,6 @@
         </span>
       </div>
     </div>
-
-    <div class="my-4"> <!-- Added a margin for spacing -->
-      <button 
-        id="initialize-db-button" 
-        class="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center"
-        onclick="initializeDocumentTypesInFirestore()">
-        <i class="fas fa-cogs mr-2"></i> Initialize Document Types
-      </button>
-      <p class="text-xs text-gray-500 mt-1">
-        Use this to set up or reset the standard document types in the database. (Admin action)
-      </p>
-    </div>
     
     <div class="bg-white rounded-lg shadow-md p-6">
       <!-- Selector de predio (con diseño mejorado pero misma funcionalidad) -->
@@ -45,7 +33,7 @@
         </h3>
         
         <div id="document-types-container" class="space-y-8">
-          <!-- Los tipos de documentos se cargarán dinámicamente como antes -->
+          <!-- Los tipos de documentos se cargarán dinámicamente  -->
         </div>
       </div>
     </div>
@@ -71,23 +59,7 @@
           <!-- Campos del formulario (misma funcionalidad, mejor diseño) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <div class="mb-4">
-                <label for="document-name" class="block text-gray-700 font-medium mb-2 required-field">Nombre del Documento</label>
-                <input type="text" id="document-name" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: Escritura pública No. 12345" required>
-              </div>
-              
-              <div class="mb-4">
-                <label for="document-date" class="block text-gray-700 font-medium mb-2 required-field">Fecha del Documento</label>
-                <input type="date" id="document-date" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
-              </div>
-
-              <div class="mb-4">
-                <label for="document-number" class="block text-gray-700 font-medium mb-2">Número de Documento</label>
-                <input type="text" id="document-number" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: 12345">
-              </div>
-            </div>
             
-            <div>
               <div class="mb-4">
                 <label for="document-responsible" class="block text-gray-700 font-medium mb-2 required-field">Responsable</label>
                 <input type="text" id="document-responsible" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Nombre completo del responsable" required>
@@ -127,7 +99,7 @@
                   </button>
                 </span>
               </p>
-              <p class="mt-2 text-xs text-gray-500">Formatos permitidos: PDF, JPG, JPEG</p>
+              <p class="mt-2 text-xs text-gray-500">Formatos permitidos: PDF</p>
             </div>
           </div>
           
@@ -155,5 +127,5 @@
 <script src="/firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
-<script src="/js/initializeDb.js"></script>
+
 <script src="/upload.js"></script>
