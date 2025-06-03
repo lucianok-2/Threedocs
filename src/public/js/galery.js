@@ -221,15 +221,23 @@ function closeDocumentsListModal() {
 }
 
 // Función para ver un documento específico
-function viewDocument(document) {
+function viewDocument(doc) {
     // Cerrar modal de lista
     closeDocumentsListModal();
     
     // Mostrar el documento en el visor principal
-    document.getElementById('docType').textContent = document.nombre;
+    document.getElementById('docType').textContent = doc.nombre;
     
-    // Construir URL del archivo desde Firebase Storage
-    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${document.ruta_archivo}?alt=media`;
+    // Usar la URL directa del archivo si está disponible
+    let fileUrl;
+    if (doc.url_archivo) {
+        fileUrl = doc.url_archivo;
+    } else {
+        // Construir URL correctamente usando el bucket de Firebase
+        const bucketName = firebase.app().options.storageBucket;
+        const encodedPath = encodeURIComponent(doc.ruta_archivo);
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+    }
     
     const iframe = document.getElementById('documentIframe');
     iframe.src = fileUrl;

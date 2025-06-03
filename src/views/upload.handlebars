@@ -10,6 +10,18 @@
         </span>
       </div>
     </div>
+
+    <div class="my-4"> <!-- Added a margin for spacing -->
+      <button 
+        id="initialize-db-button" 
+        class="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center"
+        onclick="initializeDocumentTypesInFirestore()">
+        <i class="fas fa-cogs mr-2"></i> Initialize Document Types
+      </button>
+      <p class="text-xs text-gray-500 mt-1">
+        Use this to set up or reset the standard document types in the database. (Admin action)
+      </p>
+    </div>
     
     <div class="bg-white rounded-lg shadow-md p-6">
       <!-- Selector de predio (con diseño mejorado pero misma funcionalidad) -->
@@ -89,6 +101,11 @@
             </div>
           </div>
           
+          <!-- Container for dynamically added fields -->
+          <div id="dynamic-fields-container" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Dynamically generated form fields will be injected here by JavaScript -->
+          </div>
+          
           <!-- Dropzone mejorado pero con misma funcionalidad -->
           <div class="mb-6">
             <label class="block text-gray-700 font-medium mb-2 required-field">Archivo</label>
@@ -138,4 +155,5 @@
 <script src="/firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
+<script src="/js/initializeDb.js"></script>
 <script src="/upload.js"></script>

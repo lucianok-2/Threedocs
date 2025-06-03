@@ -88,6 +88,11 @@ app.use('/api/predios', propertiesRoutes);
 const documentsRoutes = require('./routes/documents.js');
 app.use('/api/documentos', documentsRoutes);
 
+// Importar y usar las rutas de admin
+const adminRoutes = require('./routes/admin.js');
+console.log('Attempting to mount /api/admin routes from admin.js');
+app.use('/api/admin', adminRoutes);
+
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies

@@ -71,6 +71,24 @@ const upload = multer({
   }
 });
 
+// Ruta para obtener los tipos de documentos
+router.get('/types', async (req, res) => {
+  try {
+    const documentTypesSnapshot = await db.collection('document_types').get();
+    const documentTypes = [];
+    documentTypesSnapshot.forEach(doc => {
+      documentTypes.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    res.json(documentTypes);
+  } catch (error) {
+    console.error('Error al obtener tipos de documento:', error);
+    res.status(500).json({ error: 'Error al obtener tipos de documento' });
+  }
+});
+
 // Ruta para subir un documento
 router.post('/upload', upload.single('documentFile'), async (req, res) => {
   try {
@@ -80,12 +98,23 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     }
     
     // Verificar que se hayan enviado todos los datos necesarios
-    if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId) {
+    // documentName is no longer a direct required body field, it will be derived from documentType
+    if (!req.body.documentTypeId || !req.body.propertyId) {
       // Eliminar el archivo temporal
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Faltan datos requeridos' });
+      return res.status(400).json({ error: 'Faltan datos requeridos: documentTypeId o propertyId' });
     }
     
+    // Fetch document type to get its name
+    const documentTypeRef = db.collection('document_types').doc(req.body.documentTypeId);
+    const documentTypeDoc = await documentTypeRef.get();
+
+    if (!documentTypeDoc.exists) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Tipo de documento no encontrado' });
+    }
+    const documentTypeName = documentTypeDoc.data().name || 'Documento sin nombre especificado';
+
     // Verificar que el predio exista y pertenezca al usuario
     const predioRef = db.collection('predios').doc(req.body.propertyId);
     const predioDoc = await predioRef.get();
@@ -139,20 +168,44 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     // Crear el documento en la base de datos
     const documentData = {
-      nombre: req.body.documentName,
+      nombre: documentTypeName, // Derived from document type
       id_predio: req.body.propertyId,
-      id_user: req.usuario.uid,
-      tipo_documento: parseInt(req.body.documentTypeId),
+      id_user: req.usuario.uid, // from token middleware
+      tipo_documento: req.body.documentTypeId, // No longer needs parseInt if client sends it as a string that matches Firestore expectations or if it's a number. Let's assume it's a string ID.
       fecha_subida: new Date(),
-      fecha_creacion: new Date(),
+      // fecha_creacion is set by Firestore server timestamp or should be new Date()
+      fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
       ruta_archivo: filePath,
       url_archivo: downloadURL,
-      hash: fileHash,
+      hash: req.body.fileHash || fileHash, // Prefer client-side hash if available
       tipo_archivo: req.file.mimetype,
       tamano: req.file.size,
       nombre_original: req.file.originalname,
-      estado: 'completo'
+      estado: 'completo', // Default state
+      responsiblePerson: req.body.responsiblePerson || '', // Static field
+      documentDescription: req.body.documentDescription || '' // Static field
     };
+
+    // Populate additional_data with dynamic fields
+    const additional_data = {};
+    const knownFields = [
+      'documentTypeId', 'propertyId', 'documentFile',
+      'responsiblePerson', 'documentDescription', 'fileHash', 
+      'userId', 'uploadDate',
+      'id_predio', 'tipo_documento' 
+    ];
+    
+    // Add safety check for req.body
+    if (req.body && typeof req.body === 'object') {
+      for (const key in req.body) {
+        if (Object.prototype.hasOwnProperty.call(req.body, key) && !knownFields.includes(key)) {
+          if (!documentData.hasOwnProperty(key)) {
+            additional_data[key] = req.body[key];
+          }
+        }
+      }
+    }
+    documentData.additional_data = additional_data;
     
     const docRef = await db.collection('documentos').add(documentData);
     
