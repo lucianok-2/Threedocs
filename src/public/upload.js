@@ -226,11 +226,10 @@ document.addEventListener('DOMContentLoaded', function () {
       dynamicFieldsContainer.innerHTML = ''; // Limpiar campos de una apertura anterior
 
       const standardStaticFieldLabels = [
-        'Nombre del Documento', 
-        'Fecha del Documento', 
-        'Responsable',
-        'Número de Documento', // Asumiendo que 'document-number' label es 'Número de Documento'
-        'Descripción'        // Asumiendo que 'document-description' label es 'Descripción'
+        'Responsable', 
+        'Descripción'
+        // Ensure these labels exactly match the textContent of the <label> elements for
+        // document-responsible and document-description in upload.handlebars
       ];
 
       if (fieldsToCollect && fieldsToCollect.length > 0) {
@@ -243,7 +242,6 @@ document.addEventListener('DOMContentLoaded', function () {
           const label = document.createElement('label');
           const fieldId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
           label.htmlFor = fieldId;
-          label.className = 'block text-gray-700 font-medium mb-2 required-field'; // Assuming required
           label.textContent = fieldName;
 
           const input = document.createElement('input');
@@ -252,7 +250,15 @@ document.addEventListener('DOMContentLoaded', function () {
           input.name = fieldId; // Use fieldId as name for FormData
           input.className = 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500';
           input.placeholder = `Ingrese ${fieldName}`;
-          input.required = true; // Assuming required
+
+          // Make 'archivo kmz' optional
+          if (fieldName.toLowerCase() === 'archivo kmz') {
+            input.required = false;
+            label.className = 'block text-gray-700 font-medium mb-2'; // Not required
+          } else {
+            input.required = true;
+            label.className = 'block text-gray-700 font-medium mb-2 required-field'; // Required
+          }
 
           fieldDiv.appendChild(label);
           fieldDiv.appendChild(input);
@@ -333,24 +339,43 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const formData = new FormData(); // Initialize FormData here
 
-      const documentName = document.getElementById('document-name');
-      const typeId = document.getElementById('document-type-id');
-      const propertyId = document.getElementById('property-id');
-      const responsiblePerson = document.getElementById('document-responsible'); // Corregido
-      const documentDate = document.getElementById('document-date');
-      const documentDescription = document.getElementById('document-description');
+      // Get references to elements that are definitely part of the static form
+      const responsiblePersonElement = document.getElementById('document-responsible');
+      const documentDescriptionElement = document.getElementById('document-description');
+      const typeIdElement = document.getElementById('document-type-id'); // Hidden
+      const propertyIdElement = document.getElementById('property-id');   // Hidden
+      // fileInput is from outer scope
 
-      if (!documentName || !typeId || !propertyId || !fileInput || !fileInput.files[0] || !responsiblePerson || !documentDate) {
-        const missingFields = [];
-        if (!documentName.value) missingFields.push('Nombre del documento');
-        if (!responsiblePerson.value) missingFields.push('Persona responsable');
-        if (!documentDate.value) missingFields.push('Fecha del documento');
-        if (!fileInput.files[0]) missingFields.push('Archivo');
-        
-        alert(`Por favor complete los siguientes campos requeridos:\n\n${missingFields.join('\n')}`);
-        return;
+      const missingFieldsMessages = [];
+
+      // Validate static required fields
+      if (!responsiblePersonElement) {
+        missingFieldsMessages.push('Falta el campo: Responsable (elemento HTML no encontrado).');
+      } else if (!responsiblePersonElement.value.trim()) {
+        missingFieldsMessages.push('Responsable es requerido.');
+      }
+      
+      if (!fileInput) {
+        missingFieldsMessages.push('Falta el campo: Archivo (elemento HTML no encontrado).');
+      } else if (!fileInput.files || fileInput.files.length === 0) {
+        missingFieldsMessages.push('Archivo es requerido.');
       }
 
+      // Validate existence of hidden fields (sanity check)
+      if (!typeIdElement) missingFieldsMessages.push('Falta el campo oculto: Tipo de Documento ID.');
+      if (!propertyIdElement) missingFieldsMessages.push('Falta el campo oculto: ID de Predio.');
+
+      // Note: Dynamic fields added by `openUploadModal` have their own `required` attribute.
+      // The browser will enforce those. If any dynamic field is required and empty,
+      // the 'submit' event might not even fire, or this code could be extended
+      // to iterate over dynamic fields and check their `input.validity.valid`.
+      // For now, relying on browser validation for dynamic required fields.
+
+      if (missingFieldsMessages.length > 0) {
+        alert(`Por favor corrija los siguientes errores:\n\n- ${missingFieldsMessages.join('\n- ')}`);
+        return;
+      }
+      
       const file = fileInput.files[0];
 
       // Calcular el hash del archivo
@@ -360,14 +385,14 @@ document.addEventListener('DOMContentLoaded', function () {
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
       // Crear FormData con todos los metadatos
-      // formData ya está inicializada arriba
-      formData.append('documentName', documentName.value);
-      formData.append('documentTypeId', typeId.value);
-      formData.append('propertyId', propertyId.value);
-      formData.append('documentFile', file);
-      formData.append('responsiblePerson', responsiblePerson.value);
-      formData.append('documentDate', documentDate.value);
-      formData.append('documentDescription', documentDescription.value);
+      formData.append('documentTypeId', typeIdElement.value);
+      formData.append('propertyId', propertyIdElement.value);
+      formData.append('documentFile', file); 
+      formData.append('responsiblePerson', responsiblePersonElement.value.trim());
+      
+      if (documentDescriptionElement) { // Append description if element exists and has a value (optional)
+        formData.append('documentDescription', documentDescriptionElement.value.trim());
+      }
       formData.append('fileHash', hashHex);
       formData.append('userId', JSON.parse(localStorage.getItem('user'))?.uid || 'unknown');
       formData.append('uploadDate', new Date().toISOString());
@@ -396,7 +421,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const storage = firebase.storage();
         // Usa el método ref() en lugar de bucket()
         const storageRef = storage.ref();
-        const fileRef = storageRef.child(`documents/${propertyId.value}/${hashHex}/${file.name}`);
+        const fileRef = storageRef.child(`documents/${propertyIdElement.value}/${hashHex}/${file.name}`);
         
         // Y luego usa put() para subir el archivo
         const uploadTask = fileRef.put(file);
