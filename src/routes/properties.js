@@ -78,66 +78,75 @@ router.get('/:id', verificarToken, async (req, res) => {
 // Crear un nuevo predio
 router.post('/', verificarToken, async (req, res) => {
   try {
+    const { nombre, ubicacion, rol, superficie, descripcion, idPredio, certificaciones, propietario, modeloCompra, rutPropietario, nombrePropietario, intermediario } = req.body;
+    const { uid } = req.usuario;
+
+    // Verificar si ya existe un predio con el mismo id_user e idPredio
+    const existingPredioQuery = await db.collection('predios')
+                                      .where('id_user', '==', uid)
+                                      .where('idPredio', '==', idPredio)
+                                      .get();
+
+    if (!existingPredioQuery.empty) {
+      return res.status(409).json({ 
+        error: 'Ya existe un predio con este ID', 
+        idPredio: idPredio 
+      });
+    }
+
     const predioData = {
-      nombre: req.body.nombre,
-      ubicacion: req.body.ubicacion || '',
-      rol: req.body.rol || '',
-      superficie: req.body.superficie || null,
-      descripcion: req.body.descripcion || '',
-      idPredio: req.body.idPredio, // Añadir el campo idPredio
+      nombre: nombre,
+      ubicacion: ubicacion || '',
+      rol: rol || '',
+      superficie: superficie || null,
+      descripcion: descripcion || '',
+      idPredio: idPredio, 
       fechaCreacion: new Date(),
-      // Guardar automáticamente el ID del usuario
-      id_user: req.usuario.uid,
-      is_active: req.body.is_active !== undefined ? req.body.is_active : true
+      id_user: uid
     };
     
-    // Añadir información de certificaciones si existe
-    if (req.body.certificaciones && Array.isArray(req.body.certificaciones)) {
-      predioData.certificaciones = req.body.certificaciones;
+    if (certificaciones && Array.isArray(certificaciones)) {
+      predioData.certificaciones = certificaciones;
     }
     
-    // Añadir información del propietario si existe
-    if (req.body.propietario) {
+    if (propietario) {
       predioData.propietario = {
-        nombre: req.body.propietario.nombre || '',
-        rut: req.body.propietario.rut || ''
+        nombre: propietario.nombre || '',
+        rut: propietario.rut || ''
       };
     }
     
-    // Añadir modelo de compra si existe
-    if (req.body.modeloCompra) {
-      predioData.modeloCompra = req.body.modeloCompra;
+    if (modeloCompra) {
+      predioData.modeloCompra = modeloCompra;
     }
     
-    // Añadir información de rutPropietario y nombrePropietario si existen
-    if (req.body.rutPropietario) {
-      predioData.rutPropietario = req.body.rutPropietario;
+    if (rutPropietario) {
+      predioData.rutPropietario = rutPropietario;
     }
     
-    if (req.body.nombrePropietario) {
-      predioData.nombrePropietario = req.body.nombrePropietario;
+    if (nombrePropietario) {
+      predioData.nombrePropietario = nombrePropietario;
     }
     
-    // Añadir información de intermediario si existe
-    if (req.body.intermediario) {
-      predioData.intermediario = req.body.intermediario;
+    if (intermediario) {
+      predioData.intermediario = intermediario;
     }
+
     const docRef = await db.collection('predios').add(predioData);
 
     try {
       await addHistoryEntry({
-        userId: req.usuario.uid,
+        userId: uid,
         actionType: 'CREATE_PROPERTY',
         entityType: 'property',
         entityId: docRef.id,
         details: { 
           propertyName: predioData.nombre, 
-          idPredio: predioData.idPredio // User-defined ID/folio if available
+          idPredio: predioData.idPredio 
         }
       });
     } catch (historyError) {
       console.error('Error adding history entry for create property:', historyError);
-      // Log and continue, primary operation was successful
     }
     
     res.status(201).json({
@@ -162,7 +171,6 @@ router.put('/:id', verificarToken, async (req, res) => {
     
     const predioActual = doc.data();
     
-    // Verificar que el predio pertenezca al usuario actual
     if (predioActual.id_user !== req.usuario.uid) {
       return res.status(403).json({ error: 'No tienes permiso para modificar este predio' });
     }
@@ -173,28 +181,21 @@ router.put('/:id', verificarToken, async (req, res) => {
       rol: req.body.rol || predioActual.rol || '',
       superficie: req.body.superficie || predioActual.superficie || null,
       descripcion: req.body.descripcion || predioActual.descripcion || '',
-      idPredio: predioActual.idPredio, // Mantener el idPredio existente
+      idPredio: predioActual.idPredio, 
       fechaActualizacion: new Date(),
-      // Mantener el id_user original
       id_user: req.usuario.uid,
-      is_active: req.body.is_active !== undefined ? req.body.is_active : predioActual.is_active,
-      // Actualizar rutPropietario y nombrePropietario
       rutPropietario: req.body.rutPropietario || predioActual.rutPropietario || '',
       nombrePropietario: req.body.nombrePropietario || predioActual.nombrePropietario || '',
-      // Actualizar modeloCompra
       modeloCompra: req.body.modeloCompra || predioActual.modeloCompra || 'Propietario'
     };
     
-    // Actualizar información de certificaciones si existe
     if (req.body.certificaciones && Array.isArray(req.body.certificaciones)) {
       predioData.certificaciones = req.body.certificaciones;
     }
     
-    // Actualizar información del intermediario si existe
     if (req.body.intermediario) {
       predioData.intermediario = req.body.intermediario;
     } else if (predioData.modeloCompra !== 'Intermediario') {
-      // Si el modelo ya no es intermediario, eliminar la información de intermediario
       predioData.intermediario = null;
     }
     
@@ -205,16 +206,15 @@ router.put('/:id', verificarToken, async (req, res) => {
         userId: req.usuario.uid,
         actionType: 'UPDATE_PROPERTY',
         entityType: 'property',
-        entityId: doc.id, // or req.params.id
+        entityId: doc.id, 
         details: { 
           propertyName: predioData.nombre, 
-          idPredio: predioData.idPredio, // User-defined ID/folio
-          updatedFields: Object.keys(req.body) // Fields present in the update request
+          idPredio: predioData.idPredio, 
+          updatedFields: Object.keys(req.body) 
         }
       });
     } catch (historyError) {
       console.error('Error adding history entry for update property:', historyError);
-      // Log and continue
     }
     
     res.json({
@@ -239,7 +239,6 @@ router.delete('/:id', verificarToken, async (req, res) => {
     
     const predioData = doc.data();
     
-    // Verificar que el predio pertenezca al usuario actual
     if (predioData.id_user !== req.usuario.uid) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este predio' });
     }
@@ -249,15 +248,14 @@ router.delete('/:id', verificarToken, async (req, res) => {
         userId: req.usuario.uid,
         actionType: 'DELETE_PROPERTY',
         entityType: 'property',
-        entityId: doc.id, // or req.params.id
+        entityId: doc.id, 
         details: { 
           propertyName: predioData.nombre, 
-          idPredio: predioData.idPredio // User-defined ID/folio
+          idPredio: predioData.idPredio 
         }
       });
     } catch (historyError) {
       console.error('Error adding history entry for delete property:', historyError);
-      // Log and continue with delete operation
     }
     
     await predioRef.delete();
@@ -272,7 +270,6 @@ router.delete('/:id', verificarToken, async (req, res) => {
 // Ruta para obtener los documentos de un predio
 router.get('/:id/documentos', verificarToken, async (req, res) => {
   try {
-    // Primero verificar que el predio pertenezca al usuario
     const predioRef = db.collection('predios').doc(req.params.id);
     const predioDoc = await predioRef.get();
     
@@ -286,7 +283,6 @@ router.get('/:id/documentos', verificarToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para acceder a este predio' });
     }
     
-    // Obtener los documentos asociados al predio
     const documentosRef = db.collection('documentos');
     const snapshot = await documentosRef.where('id_predio', '==', req.params.id).get();
     
