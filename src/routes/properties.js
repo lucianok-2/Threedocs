@@ -87,7 +87,8 @@ router.post('/', verificarToken, async (req, res) => {
       idPredio: req.body.idPredio, // Añadir el campo idPredio
       fechaCreacion: new Date(),
       // Guardar automáticamente el ID del usuario
-      id_user: req.usuario.uid
+      id_user: req.usuario.uid,
+      is_active: req.body.is_active !== undefined ? req.body.is_active : true
     };
     
     // Añadir información de certificaciones si existe
@@ -176,6 +177,7 @@ router.put('/:id', verificarToken, async (req, res) => {
       fechaActualizacion: new Date(),
       // Mantener el id_user original
       id_user: req.usuario.uid,
+      is_active: req.body.is_active !== undefined ? req.body.is_active : predioActual.is_active,
       // Actualizar rutPropietario y nombrePropietario
       rutPropietario: req.body.rutPropietario || predioActual.rutPropietario || '',
       nombrePropietario: req.body.nombrePropietario || predioActual.nombrePropietario || '',

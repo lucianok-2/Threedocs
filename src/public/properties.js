@@ -615,7 +615,8 @@ function updateProperty(form) {
     rutPropietario: rutPropietario,
     nombrePropietario: nombrePropietario,
     ubicacion: ubicacion,
-    certificaciones: certificaciones
+    certificaciones: certificaciones,
+    is_active: document.getElementById('edit-property-active').checked
   };
   
   // Si el modelo de compra es Intermediario, añadir esos datos
@@ -714,10 +715,11 @@ function saveProperty(form) {
     rutPropietario: rutPropietario,
     nombrePropietario: nombrePropietario,
     ubicacion: ubicacion,
-    fechaCreacion: new Date().toISOString()
+    fechaCreacion: new Date().toISOString(),
+    is_active: document.getElementById('edit-property-active').checked
   };
   
-  console.log('Datos del predio a guardar:', propertyData);
+  
   
   // Si el modelo de compra es Intermediario, añadir esos datos
   if (modeloCompra === 'Intermediario') {
@@ -989,6 +991,8 @@ function showAddPropertyModal() {
       form.reset();
     }
     
+    const addActive = document.getElementById('add-property-active');
+    if (addActive) addActive.checked = true;
     // Reiniciar estado de sección de intermediario
     toggleIntermediarySection('add');
   } else {
@@ -1047,6 +1051,8 @@ function editProperty(propertyId) {
       document.getElementById('edit-purchase-model').value = property.modeloCompra || 'Propietario';
       document.getElementById('edit-owner-rut').value = property.rutPropietario || '';
       document.getElementById('edit-owner-name').value = property.nombrePropietario || '';
+      const activeChk = document.getElementById('edit-property-active');
+      if (activeChk) activeChk.checked = property.is_active !== false;
       
       // Si tiene intermediario, llenar esos campos también
       if (property.modeloCompra === 'Intermediario' && property.intermediario) {
@@ -1288,7 +1294,7 @@ function updateProperty(form) {
     };
   }
   
-  console.log('Datos actualizados del predio:', propertyData);
+  
   
   // Enviar datos al servidor
   fetch(`/api/predios/${propertyId}`, {
@@ -1376,7 +1382,7 @@ function saveProperty(form) {
     fechaCreacion: new Date().toISOString()
   };
   
-  console.log('Datos del predio a guardar:', propertyData);
+  
   
   // Si el modelo de compra es Intermediario, añadir esos datos
   if (modeloCompra === 'Intermediario') {

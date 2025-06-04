@@ -27,9 +27,14 @@ router.get('/', async (req, res) => {
   try {
     const userId = req.usuario.uid;
     const prediosSnap = await db.collection('predios').where('id_user', '==', userId).get();
+    const activeSnap = await db.collection('predios')
+      .where('id_user', '==', userId)
+      .where('is_active', '==', true)
+      .get();
     const documentosSnap = await db.collection('documentos').where('id_user', '==', userId).get();
     res.json({
       properties: prediosSnap.size,
+      activeProperties: activeSnap.size,
       documents: documentosSnap.size
     });
   } catch (error) {

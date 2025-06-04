@@ -150,6 +150,54 @@ async function fetchCounts() {
     console.error('Error al cargar contadores:', error);
   }
 }
+
+
+async function fetchRecentDocuments() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+  try {
+    const response = await fetch('/api/documentos/recientes?limit=5', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Error al obtener documentos recientes');
+    const docs = await response.json();
+    const tbody = document.getElementById('recent-documents-body');
+    const loadingRow = document.getElementById('recent-documents-loading');
+    if (loadingRow) loadingRow.remove();
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (docs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No hay documentos recientes</td></tr>';
+      return;
+    }
+    docs.forEach(doc => {
+      const tr = document.createElement('tr');
+      const fecha = doc.fecha_subida && doc.fecha_subida._seconds ? new Date(doc.fecha_subida._seconds * 1000) : null;
+      tr.innerHTML = `
+        <td class="px-6 py-4 whitespace-nowrap">
+          <div class="flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+            </svg>
+            <div class="text-sm font-medium text-gray-900">${doc.nombre || doc.nombre_original || 'Documento'}</div>
+          </div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.tipo_documento || ''}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.nombre_predio || doc.id_predio || ''}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${fecha ? fecha.toLocaleDateString() : ''}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+          <a href="${doc.url_archivo || '#'}" target="_blank" class="text-blue-600 hover:text-blue-900 mr-3">Ver</a>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (error) {
+    console.error('Error al cargar documentos recientes:', error);
+    const tbody = document.getElementById('recent-documents-body');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Error al cargar documentos</td></tr>';
+    }
+  }
+}
 document.addEventListener('DOMContentLoaded', function() {
   // Configurar la barra lateral
   // setupSidebar(); // Assuming setupSidebar is defined elsewhere or not strictly needed for this change
@@ -201,6 +249,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Fetch and display history
   if (document.getElementById('historial-lista')) {
     fetchAndDisplayHistory();
+  }
+  if (document.getElementById('recent-documents-body')) {
+    fetchRecentDocuments();
   }
   fetchCounts();
 });

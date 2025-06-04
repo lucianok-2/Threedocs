@@ -271,7 +271,30 @@ router.get('/buscar', async (req, res) => {
     res.status(500).json({ error: 'Error al buscar documentos' });
   }
 });
+// Ruta para obtener documentos recientes del usuario
+router.get('/recientes', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 5;
+    const snapshot = await db.collection('documentos')
+      .where('id_user', '==', req.usuario.uid)
+      .orderBy('fecha_subida', 'desc')
+      .limit(limit)
+      .get();
 
+    const documentos = [];
+    snapshot.forEach(doc => {
+      documentos.push({
+        _id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(documentos);
+  } catch (error) {
+    console.error('Error al obtener documentos recientes:', error);
+    res.status(500).json({ error: 'Error al obtener documentos recientes' });
+  }
+});
 // Ruta para obtener un documento específico
 router.get('/:id', async (req, res) => {
   try {
