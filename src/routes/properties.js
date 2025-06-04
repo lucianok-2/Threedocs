@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const jwt = require('jsonwebtoken');
+const { addHistoryEntry } = require('../models/historial.js');
 
 // Middleware para verificar token
 function verificarToken(req, res, next) {
@@ -121,6 +122,22 @@ router.post('/', verificarToken, async (req, res) => {
       predioData.intermediario = req.body.intermediario;
     }
     const docRef = await db.collection('predios').add(predioData);
+
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'CREATE_PROPERTY',
+        entityType: 'property',
+        entityId: docRef.id,
+        details: { 
+          propertyName: predioData.nombre, 
+          idPredio: predioData.idPredio // User-defined ID/folio if available
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for create property:', historyError);
+      // Log and continue, primary operation was successful
+    }
     
     res.status(201).json({
       _id: docRef.id,
@@ -180,6 +197,23 @@ router.put('/:id', verificarToken, async (req, res) => {
     }
     
     await predioRef.update(predioData);
+
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'UPDATE_PROPERTY',
+        entityType: 'property',
+        entityId: doc.id, // or req.params.id
+        details: { 
+          propertyName: predioData.nombre, 
+          idPredio: predioData.idPredio, // User-defined ID/folio
+          updatedFields: Object.keys(req.body) // Fields present in the update request
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for update property:', historyError);
+      // Log and continue
+    }
     
     res.json({
       _id: doc.id,
@@ -206,6 +240,22 @@ router.delete('/:id', verificarToken, async (req, res) => {
     // Verificar que el predio pertenezca al usuario actual
     if (predioData.id_user !== req.usuario.uid) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este predio' });
+    }
+
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'DELETE_PROPERTY',
+        entityType: 'property',
+        entityId: doc.id, // or req.params.id
+        details: { 
+          propertyName: predioData.nombre, 
+          idPredio: predioData.idPredio // User-defined ID/folio
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for delete property:', historyError);
+      // Log and continue with delete operation
     }
     
     await predioRef.delete();

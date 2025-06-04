@@ -154,4 +154,7 @@ app.get('/logout', (req, res) => {
    res.redirect('/');        // redirige al login o inicio
 });
 
+// Importar y usar las rutas de historial
+const historialRoutes = require('./routes/historial.js');
+app.use('/api/historial', historialRoutes);
 module.exports = app;
