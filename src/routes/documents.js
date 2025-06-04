@@ -98,22 +98,13 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     }
     
     // Verificar que se hayan enviado todos los datos necesarios
-    // documentName is no longer a direct required body field, it will be derived from documentType
-    if (!req.body.documentTypeId || !req.body.propertyId) {
+    if (!req.body.documentTypeNameForUpload || !req.body.propertyId) {
       // Eliminar el archivo temporal
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Faltan datos requeridos: documentTypeId o propertyId' });
+      return res.status(400).json({ error: 'Faltan datos requeridos: documentTypeNameForUpload o propertyId' });
     }
     
-    // Fetch document type to get its name
-    const documentTypeRef = db.collection('document_types').doc(req.body.documentTypeId);
-    const documentTypeDoc = await documentTypeRef.get();
-
-    if (!documentTypeDoc.exists) {
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ error: 'Tipo de documento no encontrado' });
-    }
-    const documentTypeName = documentTypeDoc.data().name || 'Documento sin nombre especificado';
+    const receivedDocumentTypeName = req.body.documentTypeNameForUpload;
 
     // Verificar que el predio exista y pertenezca al usuario
     const predioRef = db.collection('predios').doc(req.body.propertyId);
@@ -155,7 +146,7 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
           originalName: req.file.originalname,
           uploadedBy: req.usuario.uid,
           propertyId: req.body.propertyId,
-          documentType: req.body.documentTypeId
+          documentType: receivedDocumentTypeName // Store name here too
         }
       }
     });
@@ -168,10 +159,10 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     // Crear el documento en la base de datos
     const documentData = {
-      nombre: documentTypeName, // Derived from document type
+      nombre: receivedDocumentTypeName, // Document's own name is the type name
       id_predio: req.body.propertyId,
       id_user: req.usuario.uid, // from token middleware
-      tipo_documento: req.body.documentTypeId, // No longer needs parseInt if client sends it as a string that matches Firestore expectations or if it's a number. Let's assume it's a string ID.
+      tipo_documento: receivedDocumentTypeName, // Store the NAME here
       fecha_subida: new Date(),
       // fecha_creacion is set by Firestore server timestamp or should be new Date()
       fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
@@ -189,7 +180,7 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     // Populate additional_data with dynamic fields
     const additional_data = {};
     const knownFields = [
-      'documentTypeId', 'propertyId', 'documentFile',
+      'documentTypeNameForUpload', 'propertyId', 'documentFile', // Updated documentTypeId to documentTypeNameForUpload
       'responsiblePerson', 'documentDescription', 'fileHash', 
       'userId', 'uploadDate',
       'id_predio', 'tipo_documento' 
@@ -237,7 +228,7 @@ router.get('/buscar', async (req, res) => {
       .where('id_user', '==', req.usuario.uid);
     
     if (tipo_documento) {
-      query = query.where('tipo_documento', '==', parseInt(tipo_documento));
+      query = query.where('tipo_documento', '==', tipo_documento); // Removed parseInt
     }
     
     if (id_predio) {

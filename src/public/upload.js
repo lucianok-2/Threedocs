@@ -212,6 +212,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (modalTitleText) modalTitleText.textContent = `Subir: ${typeName}`;
     if (documentTypeIdInput) documentTypeIdInput.value = typeId;
+
+    const documentTypeNameInput = document.getElementById('document-type-name');
+    if (documentTypeNameInput) {
+        documentTypeNameInput.value = typeName;
+    } else {
+        console.error('CRITICAL: Hidden input with ID "document-type-name" not found in upload.handlebars. This field is required for sending the type name.');
+    }
+
     if (propertyIdInput) propertyIdInput.value = propertySelect.value;
 
     // Limpiar el formulario
@@ -344,6 +352,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const documentDescriptionElement = document.getElementById('document-description');
       const typeIdElement = document.getElementById('document-type-id'); // Hidden
       const propertyIdElement = document.getElementById('property-id');   // Hidden
+      const documentTypeNameElement = document.getElementById('document-type-name'); // New
       // fileInput is from outer scope
 
       const missingFieldsMessages = [];
@@ -362,8 +371,21 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       // Validate existence of hidden fields (sanity check)
-      if (!typeIdElement) missingFieldsMessages.push('Falta el campo oculto: Tipo de Documento ID.');
+      // if (!typeIdElement) missingFieldsMessages.push('Falta el campo oculto: Tipo de Documento ID.'); // No longer primary, but good to keep if used elsewhere
       if (!propertyIdElement) missingFieldsMessages.push('Falta el campo oculto: ID de Predio.');
+      
+      // Crucial Validation for documentTypeNameElement
+      if (!documentTypeNameElement || !documentTypeNameElement.value) {
+        // missingFieldsMessages.push('Nombre del tipo de documento no capturado. Asegúrese que el campo oculto document-type-name exista y tenga valor.');
+        // Using alert directly as per subtask description for this specific critical error
+        alert('Error: Nombre del tipo de documento no capturado. Asegúrese que el campo oculto document-type-name exista y tenga valor.');
+        if (submitUploadBtn) {
+            submitUploadBtn.disabled = false;
+            submitUploadBtn.textContent = 'Subir Documento';
+        }
+        return;
+      }
+
 
       // Note: Dynamic fields added by `openUploadModal` have their own `required` attribute.
       // The browser will enforce those. If any dynamic field is required and empty,
@@ -385,7 +407,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
       // Crear FormData con todos los metadatos
-      formData.append('documentTypeId', typeIdElement.value);
+      // formData.append('documentTypeId', typeIdElement.value); // Removed as per subtask
+      formData.append('documentTypeNameForUpload', documentTypeNameElement.value); // Added
       formData.append('propertyId', propertyIdElement.value);
       formData.append('documentFile', file); 
       formData.append('responsiblePerson', responsiblePersonElement.value.trim());

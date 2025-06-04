@@ -489,11 +489,11 @@ function loadPropertyDocuments(propertyId) {
           documentItem.innerHTML = `
             <div class="flex justify-between items-center">
               <div>
-                <div class="font-medium">${document.nombre}</div>
-                <div class="text-sm text-gray-600">${new Date(document.fechaSubida).toLocaleDateString()}</div>
+                <div class="font-medium">${document.nombre || 'Nombre no disponible'}</div>
+                <div class="text-sm text-gray-600">${document.fecha_subida ? new Date(document.fecha_subida).toLocaleDateString() : 'Fecha no disponible'}</div>
               </div>
               <div>
-                <a href="${document.url}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2">Ver</a>
+                <a href="${document.url_archivo || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2 ${!document.url_archivo ? 'hidden' : ''}">Ver</a>
                 <button class="text-red-600 hover:text-red-800 delete-document" data-id="${document._id}">Eliminar</button>
               </div>
             </div>

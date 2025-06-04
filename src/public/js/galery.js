@@ -80,7 +80,7 @@ async function loadPropertyDocuments(propertyId) {
             documentsList.innerHTML = ''; // Limpiar antes de agregar nuevos elementos
 
             // Fetch document types
-            const typesResponse = await fetch('/api/documents/types', {
+            const typesResponse = await fetch('/api/admin/document-types', { // Changed URL path
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -89,11 +89,10 @@ async function loadPropertyDocuments(propertyId) {
             }
             const fetchedDocumentTypes = await typesResponse.json();
 
-            // Crear un mapa de documentos existentes por tipo (numeric_id)
+            // Crear un mapa de documentos existentes por tipo (doc.tipo_documento is expected to be the type name)
             const existingDocsByType = {};
             documents.forEach(doc => {
-                // Asegurarse que doc.tipo_documento es el numeric_id correcto para la clave
-                if (doc.tipo_documento !== undefined) { 
+                if (doc.tipo_documento !== undefined) { // doc.tipo_documento should be the name
                     if (!existingDocsByType[doc.tipo_documento]) {
                         existingDocsByType[doc.tipo_documento] = [];
                     }
@@ -103,22 +102,23 @@ async function loadPropertyDocuments(propertyId) {
             
             // Mostrar todos los tipos de documentos dinámicamente
             fetchedDocumentTypes.forEach(type => {
-                if (type.numeric_id === undefined) {
-                    console.warn(`Tipo de documento omitido por numeric_id indefinido: ${type.name}`, type);
+                // Use type.name as the primary identifier for logic
+                if (!type.name) { // Check if type.name is valid
+                    console.warn('Tipo de documento omitido por nombre indefinido:', type);
                     return;
                 }
 
-                const existingDocs = existingDocsByType[type.numeric_id] || [];
+                const existingDocs = existingDocsByType[type.name] || []; // Use type.name for lookup
                 const estado = existingDocs.length > 0 ? 'completo' : 'faltante';
                 const docCount = existingDocs.length;
                 
                 const docElement = document.createElement('div');
                 docElement.className = `p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-${getStatusColor(estado)}`;
-                docElement.setAttribute('data-document-type', type.numeric_id); // Usar numeric_id
+                docElement.setAttribute('data-document-type', type.name); // Use type.name
                 docElement.setAttribute('data-property-id', propertyId);
                 
                 // Agregar evento click para mostrar documentos del tipo
-                docElement.onclick = () => showDocumentsByType(type.numeric_id, type.name, propertyId); // Usar type.numeric_id y type.name
+                docElement.onclick = () => showDocumentsByType(type.name, type.name, propertyId); // Pass type.name as the first argument
                 
                 docElement.innerHTML = `
                     <div class="flex justify-between items-start">
@@ -149,7 +149,7 @@ async function loadPropertyDocuments(propertyId) {
 }
 
 // Nueva función para mostrar documentos por tipo
-async function showDocumentsByType(documentTypeId, documentTypeName, propertyId) {
+async function showDocumentsByType(documentTypeNameString, documentTypeNameForModal, propertyId) { // Renamed params for clarity
     const token = localStorage.getItem('token');
     if (!token) {
         console.error('No se encontró el token.'); // Updated error message
@@ -157,9 +157,9 @@ async function showDocumentsByType(documentTypeId, documentTypeName, propertyId)
         return;
     }
 
-    // Crear parámetros de consulta para filtrar por tipo, predio y usuario
+    // Crear parámetros de consulta para filtrar por tipo (name), predio y usuario
     const params = new URLSearchParams({
-        tipo_documento: documentTypeId,
+        tipo_documento: documentTypeNameString, // Use the name for the API query
         id_predio: propertyId
     });
     
@@ -176,7 +176,7 @@ async function showDocumentsByType(documentTypeId, documentTypeName, propertyId)
 
         const documents = await response.json();
         // Mostrar modal o panel con la lista de documentos
-        showDocumentsListModal(documents, documentTypeName);
+        showDocumentsListModal(documents, documentTypeNameForModal); // Use the original type name for modal display
 
     } catch (error) {
         console.error('Error al cargar documentos por tipo:', error);
@@ -296,13 +296,75 @@ function viewDocument(doc) {
     closeDocumentsListModal();
     
     // Populate document details
-    // Ensure these elements exist in your galery.handlebars or associated HTML
-    document.getElementById('docType').textContent = doc.nombre || '-';
-    document.getElementById('docStatus').textContent = doc.estado || '-';
-    document.getElementById('docDate').textContent = doc.fecha_creacion ? formatDate(doc.fecha_creacion) : (doc.fecha_subida ? formatDate(doc.fecha_subida) : '-');
-    document.getElementById('docRut').textContent = doc.rut_asociado || '-';
-    document.getElementById('docResponsible').textContent = doc.responsiblePerson || doc.usuario_responsable || '-'; // Added fallback for responsible person
-    document.getElementById('docNotes').textContent = doc.documentDescription || doc.descripcion || '-'; // Added fallback for description
+    const detailsContainer = document.getElementById('documentDetails');
+    if (!detailsContainer) {
+        console.error('CRITICAL: Element with ID "documentDetails" not found. This container is required to display document information.');
+        // Attempt to show the iframe anyway, but details will be missing.
+        const iframe = document.getElementById('documentIframe');
+        if (iframe) {
+            iframe.src = doc.url_archivo || (firebase.app().options.storageBucket ? `https://firebasestorage.googleapis.com/v0/b/${firebase.app().options.storageBucket}/o/${encodeURIComponent(doc.ruta_archivo)}?alt=media` : 'about:blank');
+        }
+        document.getElementById('documentPreviewContent').classList.remove('hidden');
+        document.getElementById('preview-placeholder').classList.add('hidden');
+        return;
+    }
+
+    detailsContainer.innerHTML = ''; // Clear previous content
+
+    // Helper function to append detail elements
+    const appendDetail = (label, value, isUrl = false) => {
+        const wrapperDiv = document.createElement('div');
+        wrapperDiv.className = 'mb-3'; // Added margin-bottom for spacing
+
+        const labelP = document.createElement('p');
+        labelP.className = 'text-sm text-gray-500';
+        labelP.textContent = label;
+        wrapperDiv.appendChild(labelP);
+
+        const valueP = document.createElement('p');
+        valueP.className = 'font-medium text-gray-800';
+
+        if (isUrl && typeof value === 'string' && value.startsWith('http')) {
+            const link = document.createElement('a');
+            link.href = value;
+            link.target = '_blank';
+            link.textContent = 'Ver Archivo'; // Or use a more descriptive text, or the URL itself
+            link.className = 'text-blue-600 hover:text-blue-700 underline';
+            valueP.appendChild(link);
+        } else {
+            valueP.textContent = value || '-';
+        }
+        wrapperDiv.appendChild(valueP);
+        detailsContainer.appendChild(wrapperDiv);
+    };
+
+    // Append Standard/Core Fields
+    appendDetail('Nombre del Archivo', doc.nombre_original || doc.nombre || '-');
+    appendDetail('Categoría del Documento', doc.tipo_documento || '-');
+    appendDetail('Fecha de Subida', doc.fecha_subida ? formatDate(doc.fecha_subida) : '-');
+    appendDetail('Estado', doc.estado || '-');
+    if(doc.rut_asociado) appendDetail('RUT Asociado', doc.rut_asociado);
+    if(doc.responsiblePerson || doc.usuario_responsable) appendDetail('Responsable', doc.responsiblePerson || doc.usuario_responsable);
+    if(doc.documentDescription || doc.descripcion) appendDetail('Notas', doc.documentDescription || doc.descripcion);
+
+
+    // Append Dynamic Fields from doc.additional_data
+    if (doc.additional_data && typeof doc.additional_data === 'object' && Object.keys(doc.additional_data).length > 0) {
+        const separator = document.createElement('hr');
+        separator.className = 'my-4'; // Add some margin for visual separation
+        detailsContainer.appendChild(separator);
+
+        const additionalDataHeader = document.createElement('p');
+        additionalDataHeader.className = 'text-md font-semibold text-gray-700 mb-2';
+        additionalDataHeader.textContent = 'Información Adicional';
+        detailsContainer.appendChild(additionalDataHeader);
+
+        Object.entries(doc.additional_data).forEach(([key, value]) => {
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const isValueUrl = typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
+            appendDetail(formattedKey, value, isValueUrl);
+        });
+    }
 
     // Mostrar el documento en el visor principal (iframe part)
     // Usar la URL directa del archivo si está disponible
@@ -509,7 +571,13 @@ function getStatusLabel(status) {
 }
 
 function formatDate(dateString) {
+    if (!dateString) {
+        return '-'; // Or 'Fecha no disponible'
+    }
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) { // Check for invalid date
+        return '-'; // Or 'Fecha no disponible'
+    }
     return date.toLocaleDateString('es-ES');
 }
 
