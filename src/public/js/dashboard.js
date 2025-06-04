@@ -93,11 +93,6 @@ async function fetchAndDisplayHistory() {
          eventTime = new Date(entry.timestamp).toLocaleString();
       }
 
-
-      // Using a structure similar to the original hardcoded one
-      // Adding pb-4 to each li if -mb-8 is removed from ul, or adjust as needed.
-      // For now, assuming the original -mb-8 on ul and pb-8 on li is for the *last* item effect with the line.
-      // We will add pb-8 to each li for consistency with the original example's appearance for multiple items.
       li.className = 'relative pb-8';
       
       li.innerHTML = `

@@ -688,9 +688,6 @@ function saveProperty(form) {
   
   console.log('Guardando predio...');
   
-  // Crear objeto con los datos del formulario
-  const formData = new FormData(form);
-  
   // Generar un ID de predio único
   const fechaActual = new Date();
   const año = fechaActual.getFullYear();
@@ -704,13 +701,38 @@ function saveProperty(form) {
   const idPredio = `PRED-${año}${mes}${dia}-${hora}${minutos}${segundos}`;
   console.log('ID de predio generado:', idPredio);
   
-  // Obtener valores del formulario
-  const nombre = formData.get('nombre');
-  const rol = formData.get('rol');
-  const modeloCompra = formData.get('modeloCompra');
-  const rutPropietario = formData.get('rutPropietario');
-  const nombrePropietario = formData.get('nombrePropietario');
-  const ubicacion = formData.get('ubicacion') || '';
+  // Obtener valores directamente por ID (no por FormData)
+  const nombre = document.getElementById('add-property-name').value;
+  const rol = document.getElementById('add-property-rol').value;
+  const modeloCompra = document.getElementById('add-purchase-model').value;
+  const rutPropietario = document.getElementById('add-owner-rut').value;
+  const nombrePropietario = document.getElementById('add-owner-name').value;
+  
+  // Obtener información de certificaciones
+  const certificaciones = [];
+  if (document.getElementById('add-cert-fsc').checked) {
+    const codigo = document.getElementById('add-cert-fsc-code').value || '';
+    certificaciones.push({
+      tipo: 'FSC',
+      codigo: codigo,
+      activo: true
+    });
+  }
+  if (document.getElementById('add-cert-pefc').checked) {
+    const codigo = document.getElementById('add-cert-pefc-code').value || '';
+    certificaciones.push({
+      tipo: 'PEFC',
+      codigo: codigo,
+      activo: true
+    });
+  }
+  if (document.getElementById('add-cert-none').checked) {
+    certificaciones.push({
+      tipo: 'NINGUNA',
+      codigo: '',
+      activo: true
+    });
+  }
   
   // Crear objeto con los datos principales del predio
   const propertyData = {
@@ -720,22 +742,23 @@ function saveProperty(form) {
     modeloCompra: modeloCompra,
     rutPropietario: rutPropietario,
     nombrePropietario: nombrePropietario,
-    ubicacion: ubicacion,
+    certificaciones: certificaciones,
     fechaCreacion: new Date().toISOString(),
-    is_active: document.getElementById('edit-property-active').checked
+    is_active: document.getElementById('add-property-active').checked
   };
-  
-  
   
   // Si el modelo de compra es Intermediario, añadir esos datos
   if (modeloCompra === 'Intermediario') {
+    const nombreIntermediario = document.getElementById('add-intermediary-name').value;
+    const rutIntermediario = document.getElementById('add-intermediary-rut').value;
+    
     propertyData.intermediario = {
-      nombre: formData.get('nombreIntermediario'),
-      rut: formData.get('rutIntermediario'),
-      telefono: formData.get('telefonoIntermediario'),
-      email: formData.get('emailIntermediario')
+      nombre: nombreIntermediario,
+      rut: rutIntermediario
     };
   }
+  
+  console.log('Datos del predio a guardar:', propertyData);
   
   // Enviar datos al servidor
   fetch('/api/predios', {
@@ -750,7 +773,6 @@ function saveProperty(form) {
     console.log('Respuesta del servidor:', response);
     if (!response.ok) {
       return response.text().then(text => {
-        // Intentar parsear como JSON, si falla, usar el texto como mensaje
         try {
           const errorData = JSON.parse(text);
           throw new Error(errorData.message || 'Error al guardar el predio');
@@ -772,5 +794,3 @@ function saveProperty(form) {
     alert(`Error al guardar el predio: ${error.message}`);
   });
 }
-
-// Añadir al final del archivo o dentro del evento DOMContentLoaded
