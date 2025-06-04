@@ -92,7 +92,9 @@ app.use('/api/documentos', documentsRoutes);
 const adminRoutes = require('./routes/admin.js');
 console.log('Attempting to mount /api/admin routes from admin.js');
 app.use('/api/admin', adminRoutes);
-
+// Importar y usar las rutas de estadísticas
+const statsRoutes = require('./routes/stats.js');
+app.use('/api/stats', statsRoutes);
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies

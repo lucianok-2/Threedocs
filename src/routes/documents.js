@@ -6,7 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
-
+const { addHistoryEntry } = require('../models/historial.js');
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies
@@ -199,7 +199,20 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     documentData.additional_data = additional_data;
     
     const docRef = await db.collection('documentos').add(documentData);
-    
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'UPLOAD_DOCUMENT',
+        entityType: 'document',
+        entityId: docRef.id,
+        details: {
+          fileName: documentData.nombre_original,
+          idPredio: documentData.id_predio
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for upload document:', historyError);
+    }
     // Eliminar el archivo temporal
     fs.unlinkSync(req.file.path);
     
@@ -391,6 +404,20 @@ router.delete('/:id', async (req, res) => {
     // Eliminar documento de Firestore
     await docRef.delete();
     
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'DELETE_DOCUMENT',
+        entityType: 'document',
+        entityId: req.params.id,
+        details: {
+          fileName: documentData.nombre_original,
+          idPredio: documentData.id_predio
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for delete document:', historyError);
+    }
     res.json({ message: 'Documento eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar documento:', error);

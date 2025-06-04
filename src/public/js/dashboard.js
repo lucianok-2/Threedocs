@@ -133,7 +133,23 @@ async function fetchAndDisplayHistory() {
     historialList.innerHTML = `<li>Error al cargar el historial: ${error.message}</li>`;
   }
 }
-
+async function fetchCounts() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+  try {
+    const response = await fetch('/api/stats', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Error al obtener estadísticas');
+    const data = await response.json();
+    const docEl = document.getElementById('document-count');
+    const propEl = document.getElementById('property-count');
+    if (docEl) docEl.textContent = data.documents;
+    if (propEl) propEl.textContent = data.properties;
+  } catch (error) {
+    console.error('Error al cargar contadores:', error);
+  }
+}
 document.addEventListener('DOMContentLoaded', function() {
   // Configurar la barra lateral
   // setupSidebar(); // Assuming setupSidebar is defined elsewhere or not strictly needed for this change
@@ -186,11 +202,9 @@ document.addEventListener('DOMContentLoaded', function() {
   if (document.getElementById('historial-lista')) {
     fetchAndDisplayHistory();
   }
+  fetchCounts();
 });
 
-// Función para expandir/colapsar carpetas
-// Ensure toggleFolder is defined if used by other parts of dashboard.handlebars
-// For this specific subtask, it's not directly involved with history display.
 function toggleFolder(folderId) {
   const folderContent = document.getElementById(`${folderId}-content`);
   const folderIcon = document.getElementById(`${folderId}-icon`);

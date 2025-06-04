@@ -25,47 +25,47 @@ router.use(verificarToken); // Apply auth to all history routes
 // GET /api/historial - Fetch enriched history entries
 router.get('/', async (req, res) => {
   try {
-    // Basic pagination: limit, and lastVisible for cursor-based
+    // Basic pagination limit
     const limit = parseInt(req.query.limit) || 10;
-    let query = db.collection('historial')
-                  .where('userId', '==', req.usuario.uid) // Filter by current user's ID
-                  .orderBy('timestamp', 'desc')
-                  .limit(limit);
+    const baseQuery = db.collection('historial')
+                        .where('userId', '==', req.usuario.uid);
+    let snapshot;
+    let ordered = true;
 
-    if (req.query.lastVisible) {
-      // For cursor-based pagination, client needs to send the timestamp of the last visible item
-      // This requires storing the actual timestamp value, not just the ServerTimestamp placeholder
-      // For simplicity in this step, we'll stick to basic limit,
-      // or acknowledge this requires history entries to have resolved timestamps.
-      // A simpler approach for now: use offset if Firestore supported it well,
-      // but it doesn't for performance. So, we'll just use limit for now.
-      // True cursor pagination would involve getting a doc snapshot for `startAfter`.
-      // Example: const lastDocSnapshot = await db.collection('historial').doc(req.query.lastVisible).get();
-      // if (lastDocSnapshot.exists) query = query.startAfter(lastDocSnapshot);
-      // This is a placeholder for true cursor pagination.
-      // For now, we'll use a simplified lastVisible based on timestamp if provided as a number
-      // This assumes 'timestamp' field holds a queryable value.
-      // Firestore server timestamps are objects, so they need to be converted or handled differently for cursors.
-      // A practical approach would be to pass the ID of the last seen document and fetch it to use as a cursor.
-      // However, the provided code snippet focuses on limit, so we will keep it simple.
+    try {
+      // Attempt ordered fetch (requires composite index)
+      snapshot = await baseQuery.orderBy('timestamp', 'desc').limit(limit).get();
+    } catch (err) {
+      if (err.code === 9 && /index/i.test(err.message)) {
+        console.warn('Composite index missing for historial query, falling back without order');
+        ordered = false;
+        snapshot = await baseQuery.limit(limit).get();
+      } else {
+        throw err;
+      }
     }
 
-    const snapshot = await query.get();
-    if (snapshot.empty) {
+    // Basic cursor pagination could be implemented here using startAfter if needed
+
+    let docs = snapshot.docs;
+    if (!ordered) {
+      docs = docs.slice().sort((a, b) => {
+        const ta = a.data().timestamp?.toMillis?.() || 0;
+        const tb = b.data().timestamp?.toMillis?.() || 0;
+        return tb - ta;
+      });
+    }
+
+    if (docs.length === 0) {
       return res.status(200).json([]);
     }
+
 
     const enrichedHistory = [];
     for (const doc of snapshot.docs) {
       const historyEntry = { id: doc.id, ...doc.data() };
       const enrichedEntry = { ...historyEntry };
 
-      // Enrich with User Details (though it's current user, this structure is for completeness)
-      // For history, the userId in the entry is the one who performed the action.
-      // We are already filtering by req.usuario.uid, so userDetails might seem redundant
-      // if we only show history for the logged-in user about their own actions.
-      // However, if an admin could see other users' history, this would be useful.
-      // For now, let's assume we are fetching the logged-in user's own history.
       if (historyEntry.userId) {
         try {
           // If we are strictly showing the current user's history, we can use req.usuario
