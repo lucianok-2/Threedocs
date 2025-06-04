@@ -483,18 +483,18 @@ function loadPropertyDocuments(propertyId) {
         documentList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay documentos disponibles</p>';
       } else {
         documentList.innerHTML = '';
-        data.forEach(document => {
-          const documentItem = document.createElement('div');
+        data.forEach(doc => { // Changed loop variable from 'document' to 'doc'
+          const documentItem = document.createElement('div'); // This 'document' is the global object, now unshadowed
           documentItem.className = 'mb-4 p-4 border rounded-lg';
           documentItem.innerHTML = `
             <div class="flex justify-between items-center">
               <div>
-                <div class="font-medium">${document.nombre || 'Nombre no disponible'}</div>
-                <div class="text-sm text-gray-600">${document.fecha_subida ? new Date(document.fecha_subida).toLocaleDateString() : 'Fecha no disponible'}</div>
+                <div class="font-medium">${doc.nombre || 'Nombre no disponible'}</div>
+                <div class="text-sm text-gray-600">${doc.fecha_subida ? new Date(doc.fecha_subida).toLocaleDateString() : 'Fecha no disponible'}</div>
               </div>
               <div>
-                <a href="${document.url_archivo || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2 ${!document.url_archivo ? 'hidden' : ''}">Ver</a>
-                <button class="text-red-600 hover:text-red-800 delete-document" data-id="${document._id}">Eliminar</button>
+                <a href="${doc.url_archivo || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2 ${!doc.url_archivo ? 'hidden' : ''}">Ver</a>
+                <button class="text-red-600 hover:text-red-800 delete-document" data-id="${doc._id}">Eliminar</button>
               </div>
             </div>
           `;

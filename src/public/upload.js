@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const selectedFileText = document.getElementById('selected-file');
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
+  const processOcrBtn = document.getElementById('process-ocr-btn');
 
   // Verificar si estamos en la página correcta
   if (!propertySelect) {
@@ -228,6 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
       selectedFileText.classList.add('hidden');
       selectedFileText.textContent = '';
     }
+    if (processOcrBtn) processOcrBtn.classList.add('hidden'); // Hide OCR button initially
     
     const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
     if (dynamicFieldsContainer) {
@@ -308,11 +310,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (fileInput) {
     fileInput.addEventListener('change', function () {
-      if (this.files.length > 0 && selectedFileText) {
+      if (this.files.length > 0 && selectedFileText && processOcrBtn) {
         selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
         selectedFileText.classList.remove('hidden');
-      } else if (selectedFileText) {
+        processOcrBtn.classList.remove('hidden'); // Show OCR button
+      } else if (selectedFileText && processOcrBtn) {
         selectedFileText.classList.add('hidden');
+        processOcrBtn.classList.add('hidden'); // Hide OCR button
       }
     });
   }
@@ -332,12 +336,24 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
       this.classList.remove('border-blue-500');
 
-      if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText) {
+      if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText && processOcrBtn) {
         fileInput.files = e.dataTransfer.files;
         selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
         selectedFileText.classList.remove('hidden');
+        processOcrBtn.classList.remove('hidden'); // Show OCR button
       }
     });
+  }
+
+  // Example for a remove file button (if #remove-file exists and clears fileInput)
+  const removeFileBtn = document.getElementById('remove-file');
+  if (removeFileBtn) {
+      removeFileBtn.addEventListener('click', function() {
+          // ... existing logic to clear file name display and fileInput.value ...
+          if (fileInput) fileInput.value = ''; // Clear the file input
+          if (selectedFileText) selectedFileText.classList.add('hidden');
+          if (processOcrBtn) processOcrBtn.classList.add('hidden');
+      });
   }
 
   // Mejorar el manejo del envío del formulario
@@ -497,7 +513,106 @@ document.addEventListener('DOMContentLoaded', function () {
           submitUploadBtn.disabled = false;
           submitUploadBtn.textContent = 'Subir Documento';
         }
+        if (processOcrBtn) processOcrBtn.classList.add('hidden');
       }
     });
+  }
+
+  if (processOcrBtn) {
+    processOcrBtn.addEventListener('click', async function() {
+      const file = fileInput.files[0];
+      const documentTypeNameElement = document.getElementById('document-type-name');
+      const propertyIdElement = document.getElementById('property-id');
+
+      if (!file) {
+        alert('Por favor, seleccione un archivo primero.');
+        return;
+      }
+
+      if (!documentTypeNameElement || !documentTypeNameElement.value) {
+        alert('El tipo de documento no está seleccionado o no es válido.');
+        return;
+      }
+      const documentTypeName = documentTypeNameElement.value;
+      
+      if (!propertyIdElement || !propertyIdElement.value) {
+        alert('El ID del predio no está disponible. Por favor, asegúrese de que un predio esté seleccionado.');
+        return;
+      }
+      const propertyId = propertyIdElement.value;
+
+      processOcrBtn.disabled = true;
+      processOcrBtn.textContent = 'Procesando...';
+
+      const formData = new FormData();
+      formData.append('documentFile', file);
+      formData.append('documentTypeName', documentTypeName);
+      formData.append('propertyId', propertyId);
+
+      try {
+        const response = await fetch('/api/documentos/process-ocr', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}` // Assuming 'token' is available
+          },
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'OCR processing failed');
+        }
+
+        const extractedData = await response.json();
+
+        // Populate form fields
+        populateFormWithOcrData(extractedData);
+
+      } catch (error) {
+        console.error('Error processing document with OCR:', error);
+        alert('Error during OCR processing: ' + error.message);
+      } finally {
+        // Re-enable button
+        processOcrBtn.disabled = false;
+        processOcrBtn.textContent = 'Process Document with AI';
+      }
+    });
+  }
+
+  function populateFormWithOcrData(data) {
+    for (const fieldName in data) {
+      const fieldValue = data[fieldName];
+      let fieldFound = false;
+
+      // Attempt to populate known static fields first
+      if (fieldName.toLowerCase() === 'responsable' && document.getElementById('document-responsible')) {
+        document.getElementById('document-responsible').value = fieldValue;
+        fieldFound = true;
+      } else if (fieldName.toLowerCase() === 'descripción' && document.getElementById('document-description')) {
+        document.getElementById('document-description').value = fieldValue;
+        fieldFound = true;
+      }
+      // Add more static fields here if needed
+
+      // Attempt to populate dynamic fields
+      if (!fieldFound) {
+        const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
+        if (dynamicFieldsContainer) {
+          const labels = dynamicFieldsContainer.querySelectorAll('label');
+          labels.forEach(label => {
+            if (label.textContent.trim().toLowerCase() === fieldName.trim().toLowerCase()) {
+              const inputElement = document.getElementById(label.htmlFor);
+              if (inputElement) {
+                inputElement.value = fieldValue;
+                fieldFound = true;
+              }
+            }
+          });
+        }
+      }
+      if(!fieldFound){
+          console.warn(`OCR returned field "${fieldName}" but no corresponding form input was found.`);
+      }
+    }
   }
 });

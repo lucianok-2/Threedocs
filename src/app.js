@@ -9,6 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const crypto = require('crypto');
 const cors = require('cors');
+const fileUpload = require('express-fileupload'); // Added
 require('dotenv').config();
 const app = express();
 
@@ -74,6 +75,14 @@ app.use(morgan('dev'));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cookieParser()); // Agregar esta línea
+
+// Configure express-fileupload
+app.use(fileUpload({
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    createParentPath: true // Automatically create the temp directory if it doesn't exist
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas importadas

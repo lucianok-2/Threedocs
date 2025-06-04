@@ -10,7 +10,52 @@ router.post('/document-types/initialize-batch', async (req, res) => {
     
     // Example: Define a list of default document types
     const defaultDocumentTypes = [
-        
+        {
+            name: "CONSULTA ANTECEDENTE BIEN RAÍZ (SII)",
+            description: "Consulta de antecedentes de un bien raíz obtenida del SII.",
+            fieldsToCollect: [
+                "Rol del predio",
+                "direccion",
+                "comuna",
+                "Destino (Agricola o forestal)",
+                "Nombre del propietario",
+                "Fecha de emisión"
+            ],
+            // category: "Legal" // Optional: if you use categories
+        },
+        {
+            name: "RESOLUCIÓN PLAN DE MANEJO",
+            description: "Resolución de aprobación de un plan de manejo forestal emitida por CONAF.",
+            fieldsToCollect: [
+                "Rol de avalúo",
+                "comuna",
+                "Resolución N°",
+                "Superficie aprobada", // Assuming this refers to "SUPERFICIE PREDIAL A MANEJAR (HA)" or similar
+                "Fecha" // General date, might be "Fecha de Resolución"
+            ],
+            // category: "Forestal"
+        },
+        {
+            name: "AVISO EJECUCIÓN DE FAENA",
+            description: "Aviso de ejecución de faena forestal presentado a CONAF.",
+            fieldsToCollect: [
+                "Fecha de aviso",
+                "Aviso N°",
+                "predio",
+                "comuna"
+            ],
+            // category: "Forestal"
+        },
+        {
+            name: "ESCRITURA O TÍTULOS DE DOMINIO",
+            description: "Escritura pública o títulos de dominio de una propiedad.",
+            fieldsToCollect: [
+                "N° Certificado", // Or "Número de Inscripción" / "Número de Repertorio"
+                "Fojas (numero)", // Or "Fojas"
+                "Conservador de bienes raices" // Or "CBR"
+            ],
+            // category: "Legal"
+        }
     ];
 
     const batch = db.batch();
