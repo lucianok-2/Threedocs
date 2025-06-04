@@ -63,8 +63,21 @@ app.engine('handlebars', engine({
       if (!this._sections) this._sections = {};
       this._sections[name] = options.fn(this);
       return null;
+    },
+    eq: function (a, b) {
+      return a === b;
+    },
+    formatDate: function (date) {
+      if (!date) return '';
+      // Ensure date is a JS Date object
+      const d = (date instanceof Date) ? date : new Date(date);
+      if (isNaN(d.getTime())) return 'Fecha inválida';
+      // Format to something like: "enero 28, 2024, 14:30"
+      return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     }
-  }
+  },
+  layoutsDir: path.join(__dirname, 'views/layouts'), // Explicitly define layoutsDir
+  partialsDir: path.join(__dirname, 'views/partials') // Explicitly define partialsDir
 }));
 app.set('view engine', 'handlebars');
 app.set('views', path.join(__dirname, 'views'));
@@ -88,7 +101,11 @@ app.use('/api/predios', propertiesRoutes);
 const documentsRoutes = require('./routes/documents.js');
 app.use('/api/documentos', documentsRoutes);
 
-// Middleware para verificar token
+// Importar y usar las rutas del dashboard
+const dashboardRoutes = require('./routes/dashboard.js'); // Import dashboard routes
+app.use('/', dashboardRoutes); // Mount dashboard routes (handles /dashboard)
+
+// Middleware para verificar token (global, consider moving or removing if route-specific ones are preferred)
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies
   const authHeader = req.headers['authorization'];
@@ -132,7 +149,7 @@ app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
 app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
 
 // Rutas protegidas con layout principal (incluye sidebar)
-app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));
+// app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario })); // This is now handled by dashboardRoutes
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;

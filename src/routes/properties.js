@@ -122,6 +122,19 @@ router.post('/', verificarToken, async (req, res) => {
     }
     const docRef = await db.collection('predios').add(predioData);
     
+    // Registrar historial de creación
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'create',
+      type: 'predio',
+      itemId: docRef.id,
+      itemName: predioData.nombre,
+      details: {
+        message: `Predio "${predioData.nombre}" creado.`
+      }
+    });
+
     res.status(201).json({
       _id: docRef.id,
       ...predioData
@@ -181,6 +194,19 @@ router.put('/:id', verificarToken, async (req, res) => {
     
     await predioRef.update(predioData);
     
+    // Registrar historial de actualización
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'update',
+      type: 'predio',
+      itemId: doc.id,
+      itemName: predioData.nombre,
+      details: {
+        message: `Predio "${predioData.nombre}" actualizado.`
+      }
+    });
+
     res.json({
       _id: doc.id,
       ...predioData
@@ -208,8 +234,23 @@ router.delete('/:id', verificarToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este predio' });
     }
     
+    const nombrePredioEliminado = predioData.nombre; // Store the name before deleting
+
     await predioRef.delete();
     
+    // Registrar historial de eliminación
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'delete',
+      type: 'predio',
+      itemId: doc.id,
+      itemName: nombrePredioEliminado,
+      details: {
+        message: `Predio "${nombrePredioEliminado}" eliminado.`
+      }
+    });
+
     res.json({ _id: doc.id, deleted: true });
   } catch (error) {
     console.error('Error al eliminar predio:', error);

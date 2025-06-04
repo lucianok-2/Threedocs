@@ -156,6 +156,20 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     const docRef = await db.collection('documentos').add(documentData);
     
+    // Registrar historial de subida de documento
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'upload',
+      type: 'documento',
+      itemId: docRef.id,
+      itemName: documentData.nombre,
+      relatedPredioId: documentData.id_predio,
+      details: {
+        message: `Documento "${documentData.nombre}" subido al predio con ID "${documentData.id_predio}".`
+      }
+    });
+
     // Eliminar el archivo temporal
     fs.unlinkSync(req.file.path);
     
@@ -345,8 +359,25 @@ router.delete('/:id', async (req, res) => {
     }
     
     // Eliminar documento de Firestore
+    const nombreDocumentoEliminado = documentData.nombre;
+    const idPredioRelacionado = documentData.id_predio;
+
     await docRef.delete();
     
+    // Registrar historial de eliminación de documento
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'delete',
+      type: 'documento',
+      itemId: doc.id,
+      itemName: nombreDocumentoEliminado,
+      relatedPredioId: idPredioRelacionado,
+      details: {
+        message: `Documento "${nombreDocumentoEliminado}" eliminado del predio con ID "${idPredioRelacionado}".`
+      }
+    });
+
     res.json({ message: 'Documento eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar documento:', error);
@@ -430,6 +461,20 @@ router.put('/:id', async (req, res) => {
     
     await docRef.update(updateData);
     
+    // Registrar historial de actualización de documento
+    await db.collection('historial').add({
+      timestamp: new Date(),
+      userId: req.usuario.uid,
+      action: 'update',
+      type: 'documento',
+      itemId: doc.id,
+      itemName: req.body.nombre || documentData.nombre, // Use new name if provided, else old
+      relatedPredioId: documentData.id_predio,
+      details: {
+        message: `Documento "${req.body.nombre || documentData.nombre}" actualizado.`
+      }
+    });
+
     res.json({ message: 'Documento actualizado exitosamente' });
   } catch (error) {
     console.error('Error al actualizar documento:', error);
