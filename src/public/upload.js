@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const selectedFileText = document.getElementById('selected-file');
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
+  const processAiBtn = document.getElementById('process-ai-btn');
 
   // Verificar si estamos en la página correcta
   if (!propertySelect) {
@@ -202,6 +203,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName, fieldsToCollect) {
+    if (processAiBtn) {
+      processAiBtn.classList.add('hidden');
+      processAiBtn.disabled = true;
+      processAiBtn.dataset.fieldsToCollect = JSON.stringify(fieldsToCollect || []);
+    }
     console.log('Fields to collect for ' + typeName + ':', fieldsToCollect); // Log para verificar
 
     // El resto de la lógica para abrir el modal permanece, pero no se usa window.modalHelpers
@@ -256,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
           input.type = 'text'; // Default to text
           input.id = fieldId;
           input.name = fieldId; // Use fieldId as name for FormData
+          input.dataset.fieldName = fieldName; // Add data attribute for easier targeting
           input.className = 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500';
           input.placeholder = `Ingrese ${fieldName}`;
 
@@ -308,11 +315,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (fileInput) {
     fileInput.addEventListener('change', function () {
-      if (this.files.length > 0 && selectedFileText) {
-        selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
-        selectedFileText.classList.remove('hidden');
-      } else if (selectedFileText) {
-        selectedFileText.classList.add('hidden');
+      if (this.files.length > 0) {
+        const selectedFile = this.files[0];
+        if (processAiBtn) {
+          if (selectedFile.type === "application/pdf") {
+            processAiBtn.classList.remove('hidden');
+            processAiBtn.disabled = false;
+          } else {
+            processAiBtn.classList.add('hidden');
+            processAiBtn.disabled = true;
+          }
+        }
+        if (selectedFileText) {
+          selectedFileText.textContent = `Archivo seleccionado: ${selectedFile.name}`;
+          selectedFileText.classList.remove('hidden');
+        }
+      } else {
+        if (processAiBtn) {
+          processAiBtn.classList.add('hidden');
+          processAiBtn.disabled = true;
+        }
+        if (selectedFileText) {
+          selectedFileText.classList.add('hidden');
+        }
       }
     });
   }
@@ -334,7 +359,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText) {
         fileInput.files = e.dataTransfer.files;
-        selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
+        const droppedFile = fileInput.files[0];
+        if (processAiBtn) {
+          if (droppedFile.type === "application/pdf") {
+            processAiBtn.classList.remove('hidden');
+            processAiBtn.disabled = false;
+          } else {
+            processAiBtn.classList.add('hidden');
+            processAiBtn.disabled = true;
+          }
+        }
+        selectedFileText.textContent = `Archivo seleccionado: ${droppedFile.name}`;
         selectedFileText.classList.remove('hidden');
       }
     });
@@ -497,6 +532,90 @@ document.addEventListener('DOMContentLoaded', function () {
           submitUploadBtn.disabled = false;
           submitUploadBtn.textContent = 'Subir Documento';
         }
+      }
+    });
+  }
+
+  if (processAiBtn) {
+    processAiBtn.addEventListener('click', async function(e) {
+      e.preventDefault();
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert('Por favor, seleccione un archivo PDF primero.');
+        return;
+      }
+      if (file.type !== "application/pdf") {
+        alert('La función "Procesar con IA" solo está disponible para archivos PDF.');
+        return;
+      }
+
+      const documentTypeName = document.getElementById('document-type-name').value;
+      const fieldsToCollect = JSON.parse(processAiBtn.dataset.fieldsToCollect || '[]');
+
+      // Loading indicator (start)
+      processAiBtn.disabled = true;
+      processAiBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+
+      const aiFormData = new FormData();
+      aiFormData.append('documentFile', file);
+      aiFormData.append('fieldsToCollect', JSON.stringify(fieldsToCollect));
+      aiFormData.append('documentTypeName', documentTypeName);
+
+      try {
+        const response = await fetch('/api/documentos/process-ai', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: aiFormData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Error desconocido en el servidor' }));
+          throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+        }
+
+        const extractedData = await response.json();
+
+        if (extractedData && typeof extractedData === 'object') {
+          for (const fieldNameFromAI in extractedData) {
+            if (Object.prototype.hasOwnProperty.call(extractedData, fieldNameFromAI)) {
+              const value = extractedData[fieldNameFromAI];
+              let fieldPopulated = false;
+
+              // Check standard static fields first (case-insensitive for key from AI)
+              if (fieldNameFromAI.toLowerCase() === 'descripción' || fieldNameFromAI.toLowerCase() === 'descripcion') {
+                const descriptionField = document.getElementById('document-description');
+                if (descriptionField) { descriptionField.value = value; fieldPopulated = true; }
+              } else if (fieldNameFromAI.toLowerCase() === 'responsable') {
+                const responsibleField = document.getElementById('document-responsible');
+                if (responsibleField) { responsibleField.value = value; fieldPopulated = true; }
+              }
+
+              if (fieldPopulated) continue; // If populated in static field, move to next AI field
+
+              // Try to populate dynamic fields
+              const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
+              if (dynamicFieldsContainer) {
+                // Attempt to find the input field by its data-field-name attribute
+                // This requires dynamic inputs to have 'data-field-name' matching the keys from AI
+                const inputField = dynamicFieldsContainer.querySelector(`[data-field-name="${fieldNameFromAI}"]`);
+                if (inputField) {
+                  inputField.value = value;
+                } else {
+                  console.warn(`No se encontró un campo dinámico para los datos extraídos: "${fieldNameFromAI}"`);
+                }
+              }
+            }
+          }
+        }
+        alert('Documento procesado con IA. Por favor revise los campos y complete la subida.');
+
+      } catch (error) {
+        console.error('Error en Procesar con IA:', error);
+        alert(`Error en el procesamiento con IA: ${error.message}`);
+      } finally {
+        processAiBtn.disabled = false;
+        processAiBtn.innerHTML = '<i class="fas fa-cogs mr-2"></i> Procesar con IA';
       }
     });
   }

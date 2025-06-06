@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
 const { addHistoryEntry } = require('../models/historial.js');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const pdfParse = require('pdf-parse');
+const os = require('os');
+
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies
@@ -67,6 +71,134 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Tipo de archivo no permitido. Solo se permiten PDF, imágenes y documentos de Office.'));
+    }
+  }
+});
+
+// Ruta para procesar documentos con IA (Gemini)
+router.post('/process-ai', upload.single('documentFile'), async (req, res) => {
+  const tempFilePath = req.file ? req.file.path : null;
+
+  try {
+    // 1. Validar inputs
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se ha subido ningún archivo (documentFile es requerido).' });
+    }
+
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'El archivo debe ser un PDF.' });
+    }
+
+    const { fieldsToCollect: fieldsToCollectJSON, documentTypeName } = req.body;
+
+    if (!fieldsToCollectJSON || !documentTypeName) {
+      return res.status(400).json({ error: 'Los campos fieldsToCollect (JSON string array) y documentTypeName son requeridos.' });
+    }
+
+    let fieldsToCollect;
+    try {
+      fieldsToCollect = JSON.parse(fieldsToCollectJSON);
+      if (!Array.isArray(fieldsToCollect) || !fieldsToCollect.every(item => typeof item === 'string')) {
+        throw new Error('fieldsToCollect debe ser un array de strings.');
+      }
+    } catch (parseError) {
+      return res.status(400).json({ error: 'fieldsToCollect no es un JSON string array válido.' });
+    }
+
+    // 2. Verificar API Key de Gemini
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY no está configurada en las variables de entorno.');
+      return res.status(500).json({ error: 'Error de configuración del servidor: API Key no disponible.' });
+    }
+
+    // 3. Inicializar GoogleGenerativeAI
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    // 4. Leer y parsear PDF
+    let pdfTextContent;
+    try {
+      const pdfBuffer = fs.readFileSync(tempFilePath);
+      const data = await pdfParse(pdfBuffer);
+      pdfTextContent = data.text;
+    } catch (pdfError) {
+      console.error('Error al leer o parsear el PDF:', pdfError);
+      return res.status(500).json({ error: 'Error al procesar el archivo PDF.' });
+    }
+
+    if (!pdfTextContent || pdfTextContent.trim().length === 0) {
+        return res.status(400).json({ error: 'No se pudo extraer contenido del PDF o el PDF está vacío.' });
+    }
+
+    // 5. Construir el prompt para Gemini
+    const fieldListString = fieldsToCollect.map(field => `"${field}"`).join(', ');
+    const prompt = `
+      Eres un experto analista de documentos. Extrae la siguiente información del documento tipo "${documentTypeName}".
+      Los campos a extraer son: ${fieldListString}.
+      El contenido del documento es el siguiente:
+      ---
+      ${pdfTextContent}
+      ---
+      Responde ÚNICAMENTE con un objeto JSON válido que contenga estos campos como claves.
+      Si un campo no se encuentra o no aplica, utiliza null como valor para ese campo.
+      Asegúrate que la respuesta sea solo el JSON, sin texto adicional, explicaciones o markdown.
+      El JSON debe tener la siguiente estructura: { "campo1": "valor1", "campo2": null, ... }
+    `;
+
+    // 6. Llamar a la API de Gemini
+    let geminiResponseText;
+    try {
+      const generationConfig = {
+        temperature: 0.2, // Baja temperatura para respuestas más determinísticas y basadas en hechos
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048, // Ajustar según necesidad
+      };
+      const result = await model.generateContentStream([prompt]); // Using stream for potentially large inputs/outputs
+      
+      let fullText = '';
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullText += chunkText;
+      }
+      geminiResponseText = fullText;
+
+    } catch (apiError) {
+      console.error('Error en la API de Gemini:', apiError);
+      return res.status(500).json({ error: `Error al comunicarse con el servicio de IA: ${apiError.message}` });
+    }
+
+    // 7. Limpiar y parsear la respuesta JSON de Gemini
+    let extractedData;
+    try {
+      // Eliminar posible markdown ```json ... ``` y otros caracteres extraños antes/después del JSON
+      const cleanedResponse = geminiResponseText.replace(/^```json\s*|\s*```$/g, '').trim();
+      extractedData = JSON.parse(cleanedResponse);
+    } catch (jsonParseError) {
+      console.error('Error al parsear JSON de Gemini:', jsonParseError, 'Respuesta recibida:', geminiResponseText);
+      return res.status(500).json({ error: 'Error al interpretar la respuesta del servicio de IA. Formato no válido.' });
+    }
+
+    // 8. Asegurar que todos los campos solicitados estén presentes
+    const finalResult = {};
+    for (const field of fieldsToCollect) {
+      finalResult[field] = extractedData.hasOwnProperty(field) ? extractedData[field] : null;
+    }
+    
+    res.status(200).json(finalResult);
+
+  } catch (error) {
+    console.error('Error general en /process-ai:', error);
+    res.status(500).json({ error: 'Error interno del servidor durante el procesamiento con IA.' });
+  } finally {
+    // 9. Eliminar el archivo temporal
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (unlinkError) {
+        console.error('Error al eliminar el archivo temporal:', unlinkError);
+      }
     }
   }
 });
