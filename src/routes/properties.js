@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const jwt = require('jsonwebtoken');
-const { addHistoryEntry } = require('../models/historial.js');
+
 
 // Middleware para verificar token
 function verificarToken(req, res, next) {

@@ -6,7 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
-const { addHistoryEntry } = require('../models/historial.js');
+
 // Middleware para verificar token
 function verificarToken(req, res, next) {
   // Obtener token del header Authorization, query params o cookies
