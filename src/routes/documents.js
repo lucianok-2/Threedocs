@@ -8,7 +8,6 @@ const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
 const { addHistoryEntry } = require('../models/historial.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const pdfParse = require('pdf-parse');
 const os = require('os');
 
 // Middleware para verificar token
@@ -114,70 +113,89 @@ router.post('/process-ai', upload.single('documentFile'), async (req, res) => {
 
     // 3. Inicializar GoogleGenerativeAI
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-    // 4. Leer y parsear PDF
-    let pdfTextContent;
+    // 4. Preparar la parte del archivo para Gemini
+    let pdfFilePart;
     try {
-      const pdfBuffer = fs.readFileSync(tempFilePath);
-      const data = await pdfParse(pdfBuffer);
-      pdfTextContent = data.text;
-    } catch (pdfError) {
-      console.error('Error al leer o parsear el PDF:', pdfError);
+      const dataBuffer = fs.readFileSync(tempFilePath);
+      pdfFilePart = {
+        inlineData: {
+          data: dataBuffer.toString('base64'),
+          mimeType: 'application/pdf'
+        }
+      };
+    } catch (fileReadError) {
+      console.error('Error al leer el archivo PDF temporal:', fileReadError);
       return res.status(500).json({ error: 'Error al procesar el archivo PDF.' });
     }
 
-    if (!pdfTextContent || pdfTextContent.trim().length === 0) {
-        return res.status(400).json({ error: 'No se pudo extraer contenido del PDF o el PDF está vacío.' });
-    }
-
     // 5. Construir el prompt para Gemini
-    const fieldListString = fieldsToCollect.map(field => `"${field}"`).join(', ');
-    const prompt = `
-      Eres un experto analista de documentos. Extrae la siguiente información del documento tipo "${documentTypeName}".
-      Los campos a extraer son: ${fieldListString}.
-      El contenido del documento es el siguiente:
-      ---
-      ${pdfTextContent}
-      ---
-      Responde ÚNICAMENTE con un objeto JSON válido que contenga estos campos como claves.
-      Si un campo no se encuentra o no aplica, utiliza null como valor para ese campo.
-      Asegúrate que la respuesta sea solo el JSON, sin texto adicional, explicaciones o markdown.
-      El JSON debe tener la siguiente estructura: { "campo1": "valor1", "campo2": null, ... }
-    `;
+    let prompt = `Eres un asistente experto en extracción de datos de documentos PDF.\n`;
+    prompt += `Analiza el siguiente documento PDF (tipo de documento: ${documentTypeName || 'No especificado'}). \n`;
+    prompt += `Tu tarea es extraer la información correspondiente a los siguientes campos: ${fieldsToCollect.map(f => `"${f}"`).join(', ')}.\n`;
+    prompt += `Responde ÚNICAMENTE con un objeto JSON. Las claves del JSON deben ser exactamente los nombres de los campos solicitados. \n`;
+    prompt += `Si un campo no se encuentra en el documento o no aplica, el valor para esa clave en el JSON debe ser null.\n`;
+    prompt += `No incluyas explicaciones adicionales ni texto introductorio, solo el objeto JSON puro.\n`;
+    prompt += `Objeto JSON resultante:
+`;
 
     // 6. Llamar a la API de Gemini
     let geminiResponseText;
+    const generationConfig = {
+      temperature: 0.2,
+      topK: 1,
+      topP: 1,
+      maxOutputTokens: 2048,
+      // responseMimeType: "application/json", // Esto se puede habilitar si el modelo lo soporta y queremos forzar JSON
+    };
+
     try {
-      const generationConfig = {
-        temperature: 0.2, // Baja temperatura para respuestas más determinísticas y basadas en hechos
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 2048, // Ajustar según necesidad
-      };
-      const result = await model.generateContentStream([prompt]); // Using stream for potentially large inputs/outputs
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{text: prompt}, pdfFilePart] }],
+        generationConfig
+      });
       
-      let fullText = '';
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        fullText += chunkText;
+      if (result && result.response && typeof result.response.text === 'function') {
+        geminiResponseText = result.response.text();
+      } else {
+        console.error('Respuesta inesperada de la API de Gemini:', result);
+        throw new Error('Formato de respuesta no válido de la API de IA.');
       }
-      geminiResponseText = fullText;
 
     } catch (apiError) {
-      console.error('Error en la API de Gemini:', apiError);
+      console.error('Error en la API de Gemini:', apiError.message);
       return res.status(500).json({ error: `Error al comunicarse con el servicio de IA: ${apiError.message}` });
     }
 
     // 7. Limpiar y parsear la respuesta JSON de Gemini
     let extractedData;
+    let cleanedJsonString = geminiResponseText;
+
     try {
-      // Eliminar posible markdown ```json ... ``` y otros caracteres extraños antes/después del JSON
-      const cleanedResponse = geminiResponseText.replace(/^```json\s*|\s*```$/g, '').trim();
-      extractedData = JSON.parse(cleanedResponse);
+      // 1. Try to extract content from ```json ... ``` markdown block
+      const markdownJsonMatch = geminiResponseText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (markdownJsonMatch && markdownJsonMatch[1]) {
+        cleanedJsonString = markdownJsonMatch[1];
+      } else {
+        // 2. If no markdown block, try to find the main JSON object
+        const curlyBraceMatch = geminiResponseText.match(/\{([\s\S]*)\}/);
+        if (curlyBraceMatch && curlyBraceMatch[0]) {
+          cleanedJsonString = curlyBraceMatch[0];
+        } else {
+          // 3. If neither pattern works, it might be a plain JSON string already or an unexpected format
+          // console.warn("Could not find typical JSON markers, attempting to parse as is after trimming.");
+        }
+      }
+
+      cleanedJsonString = cleanedJsonString.trim();
+      extractedData = JSON.parse(cleanedJsonString);
+
     } catch (jsonParseError) {
-      console.error('Error al parsear JSON de Gemini:', jsonParseError, 'Respuesta recibida:', geminiResponseText);
-      return res.status(500).json({ error: 'Error al interpretar la respuesta del servicio de IA. Formato no válido.' });
+      console.error("Error al parsear JSON de Gemini después de la limpieza:", jsonParseError, "String intentado:", cleanedJsonString, "Respuesta original:", geminiResponseText);
+      // Lanza un nuevo error para ser capturado por el catch externo y registrado,
+      // pero con un mensaje más específico para el cliente.
+      throw new Error("La IA devolvió una respuesta que no pudo ser interpretada como JSON válido después de la limpieza.");
     }
 
     // 8. Asegurar que todos los campos solicitados estén presentes
@@ -189,7 +207,8 @@ router.post('/process-ai', upload.single('documentFile'), async (req, res) => {
     res.status(200).json(finalResult);
 
   } catch (error) {
-    console.error('Error general en /process-ai:', error);
+    // Captura tanto errores generales como el error específico de parseo de JSON lanzado arriba.
+    console.error('Error en /process-ai:', error.message); // Usar error.message para el log si es el error customizado
     res.status(500).json({ error: 'Error interno del servidor durante el procesamiento con IA.' });
   } finally {
     // 9. Eliminar el archivo temporal
