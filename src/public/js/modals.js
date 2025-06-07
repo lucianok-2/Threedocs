@@ -45,9 +45,7 @@ window.modalHelpers = {
         console.error('Hidden input with ID "document-type-name" not found. Please add it to the upload modal HTML.');
         
       }
-      // Set the value regardless of whether it was found or not, to adhere to the subtask's intent.
-      // If the element isn't there, this line will cause an error if typeNameElement is null.
-      // So, we ensure it's at least attempted if the element is expected.
+      
       if (document.getElementById('document-type-name')) {
           document.getElementById('document-type-name').value = typeName;
       } // else, it's handled by the console error above.

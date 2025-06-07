@@ -171,50 +171,7 @@
   </div>
 </div>
 
-<script>
-  // Función para expandir/colapsar carpetas
-  function toggleFolder(folderId) {
-    const folderContent = document.getElementById(`${folderId}-content`);
-    const folderIcon = document.getElementById(`${folderId}-icon`);
-    
-    if (folderContent.classList.contains('hidden')) {
-      folderContent.classList.remove('hidden');
-      folderIcon.setAttribute('d', 'M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z');
-    } else {
-      folderContent.classList.add('hidden');
-      folderIcon.setAttribute('d', 'M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h10v10H5V5z');
-    }
-  }
-  
-  // Cerrar sesión
-  document.getElementById('logout-btn').addEventListener('click', function(e) {
-    e.preventDefault();
-    // Eliminar token
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    // Redireccionar al login
-    window.location.href = '/';
-  });
-  
-  // Enlace de subida de documentos con token
-  document.getElementById('upload-link').addEventListener('click', function(e) {
-    e.preventDefault();
-    const token = localStorage.getItem('token');
-    if (token) {
-      window.location.href = `/upload`;
-    } else {
-      alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-      window.location.href = '/';
-    }
-  });
-</script>
 
-<!-- Barra lateral izquierda -->
-<div id="show-sidebar-btn" class="fixed top-4 left-4 bg-blue-800 text-white p-2 rounded-lg shadow-lg cursor-pointer hidden">
-  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-  </svg>
-</div>
 
 <!-- Incluir el archivo JavaScript del dashboard -->
 <script src="/js/dashboard.js"></script>
