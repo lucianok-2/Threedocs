@@ -1,38 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const documentController = require('../controllers/documentController');
-const jwt = require('jsonwebtoken');
+
 require('dotenv').config();
 const { storage, db } = require('../firebase'); // Added db here
 const bucket = storage.bucket();
 
 // Middleware para verificar token
-function verificarToken(req, res, next) {
-  // Obtener token del header Authorization, query params o cookies
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1] || 
-                req.query.token || 
-                req.cookies.token;
-  
-  console.log('Token recibido:', token);
-  console.log('Query params:', req.query);
-  console.log('Cookies:', req.cookies);
-  
-  if (!token) {
-      console.log('No se proporcionó token');
-      // In the context of an API, redirecting might not be appropriate.
-      // Sending a 401 Unauthorized status is more common.
-      return res.status(401).json({ error: 'No se proporcionó token' });
-  }
-  
+// Middleware para verificar el Firebase ID Token
+async function verificarToken(req, res, next) {
   try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.usuario = decoded;
-      next();
-  } catch (error) {
-      console.error('Error al verificar token:', error);
-      // Similar to the above, sending a 403 Forbidden or 401 Unauthorized
-      return res.status(401).json({ error: 'Token inválido o expirado' });
+    const bearer = req.headers.authorization;
+    const token = bearer?.startsWith('Bearer ')
+      ? bearer.split(' ')[1]
+      : req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Token requerido' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.usuario = decoded;  // uid, email, customClaims...
+    next();
+  } catch (err) {
+    console.error('Error al verificar ID Token de Firebase:', err);
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }
 

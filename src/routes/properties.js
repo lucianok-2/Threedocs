@@ -1,27 +1,30 @@
 // src/routes/properties.js
 const express = require('express');
 const router = express.Router();
-const { admin, db } = require('../firebase');
+const { db, admin } = require('../firebase');
 // const { addHistoryEntry } = require('../services/history'); // Descomenta si usas historial
 
 // Middleware para verificar el Firebase ID Token
 async function verificarToken(req, res, next) {
+  // 1) Extrae el token de Authorization, cookie o query
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : req.cookies.token || req.query.token;
+
+  if (!token) {
+    console.log('No se proporcionó token');
+    return res.redirect('/');
+  }
+
   try {
-    const bearer = req.headers.authorization;
-    const token = bearer?.startsWith('Bearer ')
-      ? bearer.split(' ')[1]
-      : req.cookies.token;
-
-    if (!token) {
-      return res.status(401).json({ error: 'Token requerido' });
-    }
-
+    // 2) Verifica el ID Token con Firebase Admin SDK
     const decoded = await admin.auth().verifyIdToken(token);
-    req.usuario = decoded;  // uid, email, customClaims...
-    next();
+    req.usuario = decoded;    // contiene uid, email, customClaims, etc.
+    return next();
   } catch (err) {
-    console.error('Error al verificar ID Token de Firebase:', err);
-    return res.status(401).json({ error: 'Token inválido o expirado' });
+    console.error('Error al verificar token con Firebase:', err);
+    return res.redirect('/');
   }
 }
 

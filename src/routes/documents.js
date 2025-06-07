@@ -7,25 +7,25 @@ const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
 const jwt = require('jsonwebtoken');
 
-// Middleware para verificar token
-function verificarToken(req, res, next) {
-  // Obtener token del header Authorization, query params o cookies
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1] || 
-                req.query.token || 
-                req.cookies.token;
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Token requerido' });
-  }
-  
+
+// Middleware para verificar el Firebase ID Token
+async function verificarToken(req, res, next) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.usuario = decoded;
+    const bearer = req.headers.authorization;
+    const token = bearer?.startsWith('Bearer ')
+      ? bearer.split(' ')[1]
+      : req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Token requerido' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.usuario = decoded;  // uid, email, customClaims...
     next();
-  } catch (error) {
-    console.error('Error al verificar token:', error);
-    return res.status(401).json({ error: 'Token inválido' });
+  } catch (err) {
+    console.error('Error al verificar ID Token de Firebase:', err);
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }
 
