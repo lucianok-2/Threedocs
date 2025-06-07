@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
+  let currentFieldsToCollect = [];
   const propertySelect = document.getElementById('property-select');
   const documentSection = document.getElementById('document-section');
   const documentTypesContainer = document.getElementById('document-types-container');
@@ -11,6 +12,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const selectedFileText = document.getElementById('selected-file');
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
+  const processAiBtn = document.getElementById('process-ai-btn');
+  const ocrLoadingIndicator = document.getElementById('ocr-loading-indicator');
 
   // Verificar si estamos en la página correcta
   if (!propertySelect) {
@@ -200,9 +203,124 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  if (processAiBtn) {
+    processAiBtn.addEventListener('click', async function() {
+        if (!fileInput || fileInput.files.length === 0 || fileInput.files[0].type !== 'application/pdf') {
+            alert('Por favor, seleccione un archivo PDF primero.');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        this.disabled = true;
+        this.textContent = 'Procesando IA...'; // Update button text
+        if (ocrLoadingIndicator) ocrLoadingIndicator.classList.remove('hidden');
+
+        try {
+            const { data: { text } } = await Tesseract.recognize(
+                file,
+                'spa', // Spanish language
+                { 
+                    logger: m => console.log(m) // Optional: for progress logging
+                }
+            );
+            
+            window.ocrExtractedText = text; // Store full OCR text
+            console.log("OCR Result:", window.ocrExtractedText);
+
+            // --- Begin data extraction logic ---
+            let extractedDataForForm = {};
+            const ocrText = window.ocrExtractedText;
+
+            if (!ocrText || ocrText.trim() === "") {
+                alert("No se pudo extraer texto del documento o el texto está vacío. No se auto-rellenarán campos.");
+            } else if (!currentFieldsToCollect || currentFieldsToCollect.length === 0) {
+                console.log("No hay 'fieldsToCollect' definidos para este tipo de documento. No se auto-rellenarán campos.");
+                alert("OCR procesado exitosamente. No hay campos específicos definidos para auto-rellenar para este tipo de documento, puede llenarlos manualmente.");
+            } else {
+                currentFieldsToCollect.forEach(fieldName => {
+                    const regex = new RegExp(fieldName + "[\\s:=-]*([^\\n\\r]+)", "i");
+                    const match = ocrText.match(regex);
+
+                    if (match && match[1]) {
+                        let value = match[1].trim();
+                        value = value.replace(/\s+/g, ' '); // Normalize spaces
+                        extractedDataForForm[fieldName] = value;
+                    } else {
+                        console.log(`Campo "${fieldName}" no encontrado en el texto OCR.`);
+                    }
+                });
+                console.log("Datos extraídos para el formulario:", extractedDataForForm);
+                window.autoPopulateData = extractedDataForForm;
+
+                if (Object.keys(extractedDataForForm).length > 0) {
+                    alert("Procesamiento IA completo. Se intentará auto-rellenar el formulario con los datos extraídos.");
+                } else {
+                    alert("Procesamiento IA completado, pero no se encontraron datos para los campos especificados en el documento. Puede llenarlos manualmente.");
+                }
+
+                // --- Begin form population logic ---
+                if (window.autoPopulateData && Object.keys(window.autoPopulateData).length > 0) {
+                    console.log("Auto-populating form fields with:", window.autoPopulateData);
+
+                    const responsiblePersonElement = document.getElementById('document-responsible');
+                    const documentDescriptionElement = document.getElementById('document-description');
+
+                    for (const fieldNameKey in window.autoPopulateData) {
+                        const value = window.autoPopulateData[fieldNameKey];
+                        
+                        if (fieldNameKey.toLowerCase() === 'responsable' && responsiblePersonElement) {
+                            responsiblePersonElement.value = value;
+                        } else if (fieldNameKey.toLowerCase() === 'descripción' && documentDescriptionElement) {
+                            documentDescriptionElement.value = value;
+                        } else {
+                            // Could be a dynamic field
+                            const originalFieldName = currentFieldsToCollect.find(fn => fn.toLowerCase() === fieldNameKey.toLowerCase());
+                            if (originalFieldName) {
+                                const dynamicFieldId = `dynamic-field-${originalFieldName.replace(/\s+/g, '-').toLowerCase()}`;
+                                const dynamicFieldElement = document.getElementById(dynamicFieldId);
+                                if (dynamicFieldElement) {
+                                    dynamicFieldElement.value = value;
+                                }
+                            }
+                        }
+                    }
+                    console.log("Form population attempt complete.");
+                } else {
+                    console.log("No data extracted or available to auto-populate form fields.");
+                }
+                // --- End form population logic ---
+            }
+            // --- End data extraction logic ---
+
+        } catch (error) {
+            console.error('Error durante el OCR:', error);
+            alert('Ocurrió un error durante el procesamiento con IA. Por favor, revise la consola para más detalles.');
+            window.ocrExtractedText = null; // Clear any previous result
+            window.autoPopulateData = {}; // Clear any auto-population data
+        } finally {
+            this.disabled = false;
+            this.textContent = 'Processar con IA'; // Reset button text
+            if (ocrLoadingIndicator) ocrLoadingIndicator.classList.add('hidden');
+        }
+    });
+  }
+
   // Función para abrir el modal de subida
   function openUploadModal(typeId, typeName, fieldsToCollect) {
+    currentFieldsToCollect = fieldsToCollect; // Assign to the higher-scoped variable
     console.log('Fields to collect for ' + typeName + ':', fieldsToCollect); // Log para verificar
+
+    // Clear previous OCR results and reset AI button state
+    window.ocrExtractedText = null;
+    window.autoPopulateData = {};
+    if (processAiBtn) {
+      processAiBtn.disabled = false;
+      processAiBtn.textContent = 'Processar con IA';
+      processAiBtn.classList.add('hidden'); // Initially hidden, shown on PDF selection
+    }
+    if (ocrLoadingIndicator) {
+      ocrLoadingIndicator.classList.add('hidden');
+    }
 
     // El resto de la lógica para abrir el modal permanece, pero no se usa window.modalHelpers
     // ya que la tarea especifica actualizar solo openUploadModal en upload.js
@@ -248,7 +366,8 @@ document.addEventListener('DOMContentLoaded', function () {
           fieldDiv.className = 'mb-4'; // Each field in its own div, can be md:col-span-1 if two per row
 
           const label = document.createElement('label');
-          const fieldId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+          // New simplified ID generation, assuming fieldName is unique within fieldsToCollect
+          const fieldId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}`;
           label.htmlFor = fieldId;
           label.textContent = fieldName;
 
@@ -286,6 +405,9 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         if (uploadModal) uploadModal.classList.add('hidden');
       }
+        if (processAiBtn) {
+          processAiBtn.classList.add('hidden');
+        }
     });
   }
 
@@ -296,6 +418,9 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         if (uploadModal) uploadModal.classList.add('hidden');
       }
+        if (processAiBtn) {
+          processAiBtn.classList.add('hidden');
+        }
     });
   }
 
@@ -311,8 +436,16 @@ document.addEventListener('DOMContentLoaded', function () {
       if (this.files.length > 0 && selectedFileText) {
         selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
         selectedFileText.classList.remove('hidden');
+          if (this.files[0].type === 'application/pdf' && processAiBtn) {
+            processAiBtn.classList.remove('hidden');
+          } else if (processAiBtn) {
+            processAiBtn.classList.add('hidden');
+          }
       } else if (selectedFileText) {
         selectedFileText.classList.add('hidden');
+          if (processAiBtn) {
+            processAiBtn.classList.add('hidden');
+          }
       }
     });
   }
@@ -336,6 +469,11 @@ document.addEventListener('DOMContentLoaded', function () {
         fileInput.files = e.dataTransfer.files;
         selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
         selectedFileText.classList.remove('hidden');
+        if (fileInput.files[0].type === 'application/pdf' && processAiBtn) {
+          processAiBtn.classList.remove('hidden');
+        } else if (processAiBtn) {
+          processAiBtn.classList.add('hidden');
+        }
       }
     });
   }
@@ -482,6 +620,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             alert('Documento subido correctamente');
             if (uploadModal) uploadModal.classList.add('hidden');
+            if (processAiBtn) {
+              processAiBtn.classList.add('hidden');
+            }
 
             // Recargar los documentos
             if (propertySelect.value) {

@@ -83,7 +83,7 @@ const firebaseConfig = {
   authDomain: "threedocs-4b9cc.firebaseapp.com",
   databaseURL: "https://threedocs-4b9cc-default-rtdb.firebaseio.com",
   projectId: "threedocs-4b9cc",
-  storageBucket: "threedocs-4b9cc.firebasestorage.app",
+  storageBucket: "gs://threedocs-4b9cc.firebasestorage.app",
   messagingSenderId: "307923650702",
   appId: "1:307923650702:web:488b36ec583152711ae1df"
 };
@@ -97,7 +97,7 @@ app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { us
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;
-    res.render('upload', { usuario: req.usuario, propertyId: propertyId });
+    res.render('upload', { usuario: req.usuario, propertyId: propertyId, firebaseConfig: firebaseConfig });
 });
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
 
