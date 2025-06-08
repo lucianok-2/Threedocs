@@ -92,15 +92,29 @@ router.get('/types', async (req, res) => {
 // Ruta para subir un documento
 router.post('/upload', upload.single('documentFile'), async (req, res) => {
   try {
-    // Verificar que se haya subido un archivo
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+    // First, determine originalName, mimeType, fileSize, and if we are in a "fileless" (URL-based) scenario
+    let originalName, mimeType, fileSize;
+    const isFilelessUpload = req.body.fileUrl && req.body.originalName && req.body.mimeType && req.body.fileSize;
+
+    if (isFilelessUpload) {
+        originalName = req.body.originalName;
+        mimeType = req.body.mimeType;
+        fileSize = parseInt(req.body.fileSize, 10); // Ensure size is an integer
+    } else if (req.file) {
+        originalName = req.file.originalname;
+        mimeType = req.file.mimetype;
+        fileSize = req.file.size;
+    } else {
+        // If neither fileUrl info nor req.file is present, then it's an error.
+        return res.status(400).json({ error: 'No se ha subido ningún archivo ni proporcionado una URL de archivo.' });
     }
     
     // Verificar que se hayan enviado todos los datos necesarios
     if (!req.body.documentTypeNameForUpload || !req.body.propertyId) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({ error: 'Faltan datos requeridos: documentTypeNameForUpload o propertyId' });
     }
     
@@ -111,8 +125,10 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     const predioDoc = await predioRef.get();
     
     if (!predioDoc.exists) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
     
@@ -120,8 +136,10 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     // Verificar que el predio pertenezca al usuario actual
     if (predioData.id_user !== req.usuario.uid) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
     }
     
@@ -130,17 +148,17 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
 
     // Use client's file hash. The server-calculated one is removed as we don't read file buffer.
     const clientFileHash = req.body.fileHash; 
-    if (!clientFileHash) {
-      // Handle missing client-side hash if it's critical.
-      // For now, we'll proceed, but this indicates an issue with client data.
-      console.warn("Client-side fileHash not provided in req.body.fileHash. Ensure client sends 'fileHash'.");
-      // fs.unlinkSync(req.file.path); // Clean up before returning if we decide to error out
-      // return res.status(400).json({ error: 'Client-side file hash is missing.' });
+    if (!clientFileHash && !isFilelessUpload) { // Hash is expected if req.file was processed by client, or if fileless.
+                                          // If it's a direct server upload (req.file but not isFilelessUpload), 
+                                          // and client didn't send hash, it's an issue.
+      // For now, we'll proceed, but this indicates an issue with client data if not purely server-handled upload.
+      console.warn("Client-side fileHash not provided in req.body.fileHash. Ensure client sends 'fileHash' for pre-hashed files.");
+      // Potentially: if (req.file) fs.unlinkSync(req.file.path);
+      // return res.status(400).json({ error: 'Client-side file hash is missing for pre-processed file.' });
     }
-
-    const clientOriginalName = req.file.originalname; // From multer processing the 'documentFile' field
-    // Path reconstruction based on client's known upload path structure
-    const clientStoragePath = `documents/${req.body.propertyId}/${clientFileHash || 'unknown_hash'}/${clientOriginalName}`;
+    
+    // Use the determined originalName for clientStoragePath
+    const clientStoragePath = `documents/${req.body.propertyId}/${clientFileHash || 'unknown_hash'}/${originalName}`;
 
     // Crear el documento en la base de datos
     const documentData = {
@@ -149,14 +167,13 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
       id_user: req.usuario.uid, // from token middleware
       tipo_documento: receivedDocumentTypeName, // Store the NAME here
       fecha_subida: req.body.uploadDate ? new Date(req.body.uploadDate) : new Date(), // Use client's uploadDate or current
-      // fecha_creacion is set by Firestore server timestamp or should be new Date()
       fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
-      ruta_archivo: clientStoragePath, // Path used by client
-      url_archivo: req.body.fileUrl,    // URL from client's upload
-      hash: clientFileHash,             // Hash from client
-      tipo_archivo: req.file.mimetype,
-      tamano: req.file.size,
-      nombre_original: clientOriginalName,
+      ruta_archivo: clientStoragePath, 
+      url_archivo: isFilelessUpload ? req.body.fileUrl : '', // If not fileless, URL might be generated later or not set
+      hash: clientFileHash, // Hash from client (or could be calculated server-side if not fileless and not provided)
+      tipo_archivo: mimeType, // Use determined mimeType
+      tamano: fileSize,       // Use determined fileSize
+      nombre_original: originalName, // Use determined originalName
       estado: 'completo', // Default state
       responsiblePerson: req.body.responsiblePerson || '', // Static field
       documentDescription: req.body.documentDescription || '' // Static field
@@ -198,8 +215,10 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     } catch (historyError) {
       console.error('Error adding history entry for upload document:', historyError);
     }
-    // Eliminar el archivo temporal
-    fs.unlinkSync(req.file.path);
+    // Eliminar el archivo temporal si existe (e.g. if it was a fallback scenario)
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
     
     res.status(201).json({
       _id: docRef.id,
@@ -208,8 +227,8 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
   } catch (error) {
     console.error('Error al subir documento:', error);
     
-    // Eliminar el archivo temporal si existe
-    if (req.file && fs.existsSync(req.file.path)) {
+    // Eliminar el archivo temporal si existe y el path is valid
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     

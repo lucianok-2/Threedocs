@@ -601,6 +601,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // Agregar URL al FormData
             formData.append('fileUrl', downloadURL);
 
+            // Append additional file details
+            formData.append('originalName', file.name);
+            formData.append('mimeType', file.type);
+            formData.append('fileSize', file.size);
+
+            // Remove the file binary if Firebase upload was successful
+            formData.delete('documentFile');
+
             // Enviar metadatos al servidor
             const response = await fetch('/api/documentos/upload', {
               method: 'POST',
