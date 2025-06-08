@@ -83,11 +83,17 @@ const firebaseConfig = {
   authDomain: "threedocs-4b9cc.firebaseapp.com",
   databaseURL: "https://threedocs-4b9cc-default-rtdb.firebaseio.com",
   projectId: "threedocs-4b9cc",
-  storageBucket: "threedocs-4b9cc.firebasestorage.app",
+  storageBucket: "gs://threedocs-4b9cc.firebasestorage.app",
   messagingSenderId: "307923650702",
   appId: "1:307923650702:web:488b36ec583152711ae1df"
 };
 
+app.use('/firebase-config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.firebaseConfig = ${JSON.stringify(firebaseConfig)}`);
+});
+
+// Rutas de autenticación con layout de autenticación
 
 app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
 app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
