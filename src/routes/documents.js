@@ -125,58 +125,43 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
     }
     
-    // Leer el archivo
-    const fileBuffer = fs.readFileSync(req.file.path);
-    
-    // Generar hash SHA-256 del archivo
-    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-    
-    // Generar nombre único para el archivo
-    const fileName = `${Date.now()}_${path.basename(req.file.originalname)}`;
-    const filePath = `documentos/${req.usuario.uid}/${req.body.propertyId}/${fileName}`;
-    
-    // Subir archivo a Firebase Storage
-    const bucket = admin.storage().bucket();
-    const file = bucket.file(filePath);
-    
-    await file.save(fileBuffer, {
-      metadata: {
-        contentType: req.file.mimetype,
-        metadata: {
-          originalName: req.file.originalname,
-          uploadedBy: req.usuario.uid,
-          propertyId: req.body.propertyId,
-          documentType: receivedDocumentTypeName // Store name here too
-        }
-      }
-    });
-    
-    // Generar URL de descarga
-    const [downloadURL] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-09-2491' // Fecha muy lejana para URL permanente
-    });
-    
+    // Client has already uploaded the file to: documents/${req.body.propertyId}/${req.body.fileHash}/${req.file.originalname}
+    // Client provides the direct download URL as req.body.fileUrl
+
+    // Use client's file hash. The server-calculated one is removed as we don't read file buffer.
+    const clientFileHash = req.body.fileHash; 
+    if (!clientFileHash) {
+      // Handle missing client-side hash if it's critical.
+      // For now, we'll proceed, but this indicates an issue with client data.
+      console.warn("Client-side fileHash not provided in req.body.fileHash. Ensure client sends 'fileHash'.");
+      // fs.unlinkSync(req.file.path); // Clean up before returning if we decide to error out
+      // return res.status(400).json({ error: 'Client-side file hash is missing.' });
+    }
+
+    const clientOriginalName = req.file.originalname; // From multer processing the 'documentFile' field
+    // Path reconstruction based on client's known upload path structure
+    const clientStoragePath = `documents/${req.body.propertyId}/${clientFileHash || 'unknown_hash'}/${clientOriginalName}`;
+
     // Crear el documento en la base de datos
     const documentData = {
       nombre: receivedDocumentTypeName, // Document's own name is the type name
       id_predio: req.body.propertyId,
       id_user: req.usuario.uid, // from token middleware
       tipo_documento: receivedDocumentTypeName, // Store the NAME here
-      fecha_subida: new Date(),
+      fecha_subida: req.body.uploadDate ? new Date(req.body.uploadDate) : new Date(), // Use client's uploadDate or current
       // fecha_creacion is set by Firestore server timestamp or should be new Date()
       fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
-      ruta_archivo: filePath,
-      url_archivo: downloadURL,
-      hash: req.body.fileHash || fileHash, // Prefer client-side hash if available
+      ruta_archivo: clientStoragePath, // Path used by client
+      url_archivo: req.body.fileUrl,    // URL from client's upload
+      hash: clientFileHash,             // Hash from client
       tipo_archivo: req.file.mimetype,
       tamano: req.file.size,
-      nombre_original: req.file.originalname,
+      nombre_original: clientOriginalName,
       estado: 'completo', // Default state
       responsiblePerson: req.body.responsiblePerson || '', // Static field
       documentDescription: req.body.documentDescription || '' // Static field
     };
-
+    
     // Populate additional_data with dynamic fields
     const additional_data = {};
     const knownFields = [

@@ -12,12 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const cancelUploadBtn = document.getElementById('cancel-upload');
   const submitUploadBtn = document.getElementById('submit-upload');
 
-  // Verificar si estamos en la página correcta
-  if (!propertySelect) {
-    console.log('No estamos en la página de subida de documentos');
-    return; // Salir si no estamos en la página correcta
-  }
-
+  
   const token = localStorage.getItem('token');
 
   if (!token) {
