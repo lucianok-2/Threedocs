@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
-const jwt = require('jsonwebtoken');
+
 
 
 // Middleware para verificar el Firebase ID Token

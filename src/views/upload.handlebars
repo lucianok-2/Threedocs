@@ -125,6 +125,34 @@
 <script src="/firebase-config.js"></script>
 <!-- Manteniendo las mismas referencias a JS -->
 <script src="/js/modals.js"></script>
+<script>
+  // Manually construct firebaseConfig from server-passed variables
+  window.firebaseConfig = {
+    apiKey: "{{firebaseConfig.apiKey}}",
+    authDomain: "{{firebaseConfig.authDomain}}",
+    databaseURL: "{{firebaseConfig.databaseURL}}",
+    projectId: "{{firebaseConfig.projectId}}",
+    storageBucket: "{{firebaseConfig.storageBucket}}",
+    messagingSenderId: "{{firebaseConfig.messagingSenderId}}",
+    appId: "{{firebaseConfig.appId}}"
+  };
+
+  // Initialize Firebase if the config object seems valid (e.g., apiKey is present)
+  if (window.firebaseConfig && window.firebaseConfig.apiKey && window.firebaseConfig.apiKey !== "") {
+    try {
+      firebase.initializeApp(window.firebaseConfig);
+      console.log('Firebase initialized in upload.handlebars (manual object construction).');
+    } catch (e) {
+      console.error('Error initializing Firebase in upload.handlebars:', e);
+      // Log the config to help debug if there's an issue with specific values
+      console.log('Firebase config used:', JSON.stringify(window.firebaseConfig));
+    }
+  } else {
+    console.error('Firebase config object not properly set up in upload.handlebars. Firebase NOT initialized.');
+    // Log the incomplete/empty config to help debug
+    console.log('Attempted Firebase config:', JSON.stringify(window.firebaseConfig));
+  }
+</script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 

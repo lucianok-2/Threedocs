@@ -103,7 +103,7 @@ app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { us
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;
-    res.render('upload', { usuario: req.usuario, propertyId: propertyId });
+    res.render('upload', { usuario: req.usuario, propertyId: propertyId, firebaseConfig: firebaseConfig });
 });
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
 
