@@ -92,7 +92,11 @@ app.use('/firebase-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.firebaseConfig = ${JSON.stringify(firebaseConfig)}`);
 });
-
+const geminiConfig = { apiKey: process.env.GEMINI_API_KEY || '' };
+app.use('/gemini-config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.geminiConfig = ${JSON.stringify(geminiConfig)}`);
+});
 // Rutas de autenticación con layout de autenticación
 
 app.get('/', (req, res) => res.render('login', { layout: 'auth' }));

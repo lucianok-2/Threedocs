@@ -68,10 +68,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Mostrar tipos de documentos cuando se selecciona un predio
   propertySelect.addEventListener('change', async function () {
+    const bulkUploadButton = document.getElementById('bulk-upload-button');
+    
     if (this.value) {
       documentSection.classList.remove('hidden');
+      if (bulkUploadButton) {
+        bulkUploadButton.classList.remove('hidden');
+      }
       documentTypesContainer.innerHTML = ''; // Clear previous
-
+    
       try {
         const response = await fetch('/api/admin/document-types', {
           headers: { 'Authorization': `Bearer ${token}` }

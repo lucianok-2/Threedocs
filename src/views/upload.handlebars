@@ -32,6 +32,13 @@
           <i class="fas fa-folder-open mr-2 text-blue-500"></i> Documentación
         </h3>
         
+        <!-- Botón de Carga Masiva -->
+        <div class="mb-6">
+          <button id="bulk-upload-button" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center">
+            <i class="fas fa-cloud-upload-alt mr-2"></i> Carga Masiva
+          </button>
+        </div>
+        
         <div id="document-types-container" class="space-y-8">
           <!-- Los tipos de documentos se cargarán dinámicamente  -->
         </div>
@@ -123,8 +130,9 @@
   </div>
 </div>
 <script src="/firebase-config.js"></script>
-<!-- Manteniendo las mismas referencias a JS -->
-<script src="/js/modals.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
+<script src="/js/modals.js"></script>
 <script src="/upload.js"></script>
+<script defer src="/js/bulk-upload.js"></script>
