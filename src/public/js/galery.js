@@ -5,60 +5,94 @@
 let currentPropertyId = null;
 
 // Función para abrir el modal del predio
-function openProperty(propertyId) {
+async function openProperty(propertyId) {
     currentPropertyId = propertyId;
     // Mostrar el modal
     document.getElementById('propertyModal').classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
-    
-    // Cargar datos del predio seleccionado
-    fetch(`/api/predios/${propertyId}`)
-        .then(response => response.json())
-        .then(data => {
-            // Actualizar la UI con los datos del predio
-            document.getElementById('modalPropertyTitle').textContent = data.nombre || 'Predio sin nombre';
-            document.getElementById('modalPropertyAddress').textContent = data.ubicacion || 'Sin dirección';
-            document.getElementById('modalPropertyRut').textContent = data.rutPropietario || 'Sin RUT';
-            
-            // Cargar los documentos del predio
-            loadPropertyDocuments(propertyId);
-        })
-        .catch(error => {
-            console.error('Error al cargar los datos del predio:', error);
-            document.getElementById('modalPropertyTitle').textContent = 'Error al cargar el predio';
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('No se encontró el token.'); // Updated error message
+        document.getElementById('modalPropertyTitle').textContent = 'Error de autenticación';
+        // Considera mostrar un mensaje más amigable al usuario o redirigir al login
+        return;
+    }
+
+    try {
+        // Cargar datos del predio seleccionado
+        const response = await fetch(`/api/predios/${propertyId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
         });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Actualizar la UI con los datos del predio
+        document.getElementById('modalPropertyTitle').textContent = data.nombre || 'Predio sin nombre';
+        document.getElementById('modalPropertyAddress').textContent = data.ubicacion || 'Sin dirección';
+        document.getElementById('modalPropertyRut').textContent = data.rutPropietario || 'Sin RUT';
+        
+        // Cargar los documentos del predio
+        await loadPropertyDocuments(propertyId);
+
+    } catch (error) {
+        console.error('Error al cargar los datos del predio:', error);
+        document.getElementById('modalPropertyTitle').textContent = 'Error al cargar el predio';
+        // Aquí podrías limpiar otras partes del modal o mostrar un mensaje de error específico
+    }
 }
 
 // Función para cargar los documentos de un predio
-function loadPropertyDocuments(propertyId) {
-    // Cargar los documentos desde Firestore a través de la API
-    fetch(`/api/predios/${propertyId}/documentos`)
-        .then(response => response.json())
-        .then(documents => {
-            const documentsList = document.getElementById('documents-list');
-            documentsList.innerHTML = '';
-            
-            // Obtener todos los tipos de documentos definidos
-            const allDocumentTypes = {
-                1: "CONSULTA ANTECEDENTE BIEN RAIZ (SII)",
-                2: "RESOLUCIÓN PLAN DE MANEJO",
-                3: "AVISO EJECUCION DE FAENA",
-                4: "ESCRITURA O TITULOS DE DOMINIO",
-                5: "CONTRATO COMPRA Y VENTA",
-                6: "PLANO DEL PREDIO",
-                7: "CONTRATO DE TRABAJO",
-                8: "DERECHO A SABER",
-                9: "ENTREGA EPP",
-                10: "VARIOS",
-                11: "REGLAMENTO INTERNO SALUD, HIGIENE Y SEGURIDAD",
-                12: "REGISTRO DE CAPACITACIÓN",
-                13: "DOCTO. ADICIONAL"
-            };
-            
-            // Crear un mapa de documentos existentes por tipo
+async function loadPropertyDocuments(propertyId) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('No se encontró el token para cargar documentos.'); // Updated error message
+        const documentsList = document.getElementById('documents-list');
+        if (documentsList) {
+            documentsList.innerHTML = '<div class="p-4 text-center text-red-500">Error de autenticación al cargar documentos.</div>';
+        }
+        return;
+    }
+
+    try {
+        // Cargar los documentos desde Firestore a través de la API
+        const response = await fetch(`/api/predios/${propertyId}/documentos`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status} al obtener documentos`);
+        }
+        const documents = await response.json();
+        const documentsList = document.getElementById('documents-list');
+            if (!documentsList) { // Asegurarse de que el elemento exista
+                console.error('Elemento #documents-list no encontrado.');
+                return;
+            }
+            documentsList.innerHTML = ''; // Limpiar antes de agregar nuevos elementos
+
+            // Fetch document types
+            const typesResponse = await fetch('/api/admin/document-types', { // Changed URL path
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!typesResponse.ok) {
+                throw new Error(`Error HTTP: ${typesResponse.status} al obtener tipos de documento`);
+            }
+            const fetchedDocumentTypes = await typesResponse.json();
+
+            // Crear un mapa de documentos existentes por tipo (doc.tipo_documento is expected to be the type name)
             const existingDocsByType = {};
             documents.forEach(doc => {
-                if (doc.tipo_documento) {
+                if (doc.tipo_documento !== undefined) { // doc.tipo_documento should be the name
                     if (!existingDocsByType[doc.tipo_documento]) {
                         existingDocsByType[doc.tipo_documento] = [];
                     }
@@ -66,24 +100,30 @@ function loadPropertyDocuments(propertyId) {
                 }
             });
             
-            // Mostrar todos los tipos de documentos, existentes o no
-            Object.entries(allDocumentTypes).forEach(([typeId, docTypeName]) => {
-                const existingDocs = existingDocsByType[parseInt(typeId)] || [];
+            // Mostrar todos los tipos de documentos dinámicamente
+            fetchedDocumentTypes.forEach(type => {
+                // Use type.name as the primary identifier for logic
+                if (!type.name) { // Check if type.name is valid
+                    console.warn('Tipo de documento omitido por nombre indefinido:', type);
+                    return;
+                }
+
+                const existingDocs = existingDocsByType[type.name] || []; // Use type.name for lookup
                 const estado = existingDocs.length > 0 ? 'completo' : 'faltante';
                 const docCount = existingDocs.length;
                 
                 const docElement = document.createElement('div');
                 docElement.className = `p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-${getStatusColor(estado)}`;
-                docElement.setAttribute('data-document-type', typeId);
+                docElement.setAttribute('data-document-type', type.name); // Use type.name
                 docElement.setAttribute('data-property-id', propertyId);
                 
                 // Agregar evento click para mostrar documentos del tipo
-                docElement.onclick = () => showDocumentsByType(parseInt(typeId), docTypeName, propertyId);
+                docElement.onclick = () => showDocumentsByType(type.name, type.name, propertyId); // Pass type.name as the first argument
                 
                 docElement.innerHTML = `
                     <div class="flex justify-between items-start">
                         <div>
-                            <h4 class="font-medium text-gray-800">${docTypeName}</h4>
+                            <h4 class="font-medium text-gray-800">${type.name}</h4>
                             <p class="text-sm text-gray-500">${docCount > 0 ? `${docCount} documento(s)` : 'Sin documentos'}</p>
                         </div>
                         <span class="bg-${getStatusBgColor(estado)} text-${getStatusTextColor(estado)} text-xs px-2 py-1 rounded-full">
@@ -98,32 +138,50 @@ function loadPropertyDocuments(propertyId) {
                 
                 documentsList.appendChild(docElement);
             });
-        })
-        .catch(error => {
-            console.error('Error al cargar los documentos:', error);
-            const documentsList = document.getElementById('documents-list');
-            documentsList.innerHTML = '<div class="p-4 text-center text-red-500">Error al cargar los documentos. Por favor, intenta de nuevo.</div>';
-        });
+
+    } catch (error) {
+        console.error('Error al cargar los documentos o tipos de documento:', error);
+        const documentsList = document.getElementById('documents-list');
+        if (documentsList) {
+            documentsList.innerHTML = `<div class="p-4 text-center text-red-500">Error al cargar la información de documentos: ${error.message}. Por favor, intenta de nuevo.</div>`;
+        }
+    }
 }
 
 // Nueva función para mostrar documentos por tipo
-function showDocumentsByType(documentTypeId, documentTypeName, propertyId) {
-    // Crear parámetros de consulta para filtrar por tipo, predio y usuario
+async function showDocumentsByType(documentTypeNameString, documentTypeNameForModal, propertyId) { // Renamed params for clarity
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('No se encontró el token.'); // Updated error message
+        alert('Error de autenticación. Por favor, inicie sesión de nuevo.');
+        return;
+    }
+
+    // Crear parámetros de consulta para filtrar por tipo (name), predio y usuario
     const params = new URLSearchParams({
-        tipo_documento: documentTypeId,
+        tipo_documento: documentTypeNameString, // Use the name for the API query
         id_predio: propertyId
     });
     
-    fetch(`/api/documentos/buscar?${params}`)
-        .then(response => response.json())
-        .then(documents => {
-            // Mostrar modal o panel con la lista de documentos
-            showDocumentsListModal(documents, documentTypeName);
-        })
-        .catch(error => {
-            console.error('Error al cargar documentos por tipo:', error);
-            alert('Error al cargar los documentos. Por favor, intenta de nuevo.');
+    try {
+        const response = await fetch(`/api/documentos/buscar?${params}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
         });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+
+        const documents = await response.json();
+        // Mostrar modal o panel con la lista de documentos
+        showDocumentsListModal(documents, documentTypeNameForModal); // Use the original type name for modal display
+
+    } catch (error) {
+        console.error('Error al cargar documentos por tipo:', error);
+        alert('Error al cargar los documentos. Por favor, intenta de nuevo.');
+    }
 }
 
 // Función para mostrar modal con lista de documentos
@@ -173,10 +231,11 @@ function showDocumentsListModal(documents, documentTypeName) {
             </div>
         `;
     } else {
-        documents.forEach(doc => {
+        documents.forEach((doc, index) => { // Added index for clarity if needed, not strictly used here
             const docElement = document.createElement('div');
             docElement.className = 'bg-gray-50 rounded-lg p-4 hover:bg-gray-100 cursor-pointer transition-colors';
-            docElement.onclick = () => viewDocument(doc);
+            // Pass the actual 'doc' object. Ensure 'doc' is in scope and correctly refers to the iterated document.
+            docElement.onclick = () => viewDocument(doc); 
             
             docElement.innerHTML = `
                 <div class="flex items-center justify-between">
@@ -185,24 +244,35 @@ function showDocumentsListModal(documents, documentTypeName) {
                             <i class="fas ${getFileIcon(doc.tipo_archivo)} text-2xl text-blue-500"></i>
                         </div>
                         <div>
-                            <h3 class="font-medium text-gray-800">${doc.nombre}</h3>
+                            <h3 class="font-medium text-gray-800">${doc.nombre || 'Documento sin nombre'}</h3>
                             <p class="text-sm text-gray-500">
-                                Subido el ${formatDate(doc.fecha_subida)} • ${formatFileSize(doc.tamano)}
+                                ${doc.fecha_subida ? `Subido el ${formatDate(doc.fecha_subida)}` : 'Fecha no disponible'} • ${doc.tamano ? formatFileSize(doc.tamano) : 'Tamaño no disponible'}
                             </p>
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="event.stopPropagation(); downloadDocument('${doc._id}')" 
-                                class="text-blue-500 hover:text-blue-700 p-2">
+                        <button class="text-blue-500 hover:text-blue-700 p-2">
                             <i class="fas fa-download"></i>
                         </button>
-                        <button onclick="event.stopPropagation(); viewDocument(${JSON.stringify(doc).replace(/"/g, '&quot;')})" 
-                                class="text-green-500 hover:text-green-700 p-2">
+                        <button class="text-green-500 hover:text-green-700 p-2">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
                 </div>
             `;
+            
+            // Add event listeners to buttons separately to pass the 'doc' object correctly
+            const downloadButton = docElement.querySelector('.fa-download').parentElement;
+            downloadButton.onclick = (event) => {
+                event.stopPropagation();
+                downloadDocument(doc._id); // Assuming doc._id is the correct identifier
+            };
+
+            const viewButton = docElement.querySelector('.fa-eye').parentElement;
+            viewButton.onclick = (event) => {
+                event.stopPropagation();
+                viewDocument(doc); // Pass the full doc object
+            };
             
             documentsListContent.appendChild(docElement);
         });
@@ -221,15 +291,92 @@ function closeDocumentsListModal() {
 }
 
 // Función para ver un documento específico
-function viewDocument(document) {
+function viewDocument(doc) {
     // Cerrar modal de lista
     closeDocumentsListModal();
     
-    // Mostrar el documento en el visor principal
-    document.getElementById('docType').textContent = document.nombre;
-    
-    // Construir URL del archivo desde Firebase Storage
-    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${document.ruta_archivo}?alt=media`;
+    // Populate document details
+    const detailsContainer = document.getElementById('documentDetails');
+    if (!detailsContainer) {
+        console.error('CRITICAL: Element with ID "documentDetails" not found. This container is required to display document information.');
+        // Attempt to show the iframe anyway, but details will be missing.
+        const iframe = document.getElementById('documentIframe');
+        if (iframe) {
+            iframe.src = doc.url_archivo || (firebase.app().options.storageBucket ? `https://firebasestorage.googleapis.com/v0/b/${firebase.app().options.storageBucket}/o/${encodeURIComponent(doc.ruta_archivo)}?alt=media` : 'about:blank');
+        }
+        document.getElementById('documentPreviewContent').classList.remove('hidden');
+        document.getElementById('preview-placeholder').classList.add('hidden');
+        return;
+    }
+
+    detailsContainer.innerHTML = ''; // Clear previous content
+
+    // Helper function to append detail elements
+    const appendDetail = (label, value, isUrl = false) => {
+        const wrapperDiv = document.createElement('div');
+        wrapperDiv.className = 'mb-3'; // Added margin-bottom for spacing
+
+        const labelP = document.createElement('p');
+        labelP.className = 'text-sm text-gray-500';
+        labelP.textContent = label;
+        wrapperDiv.appendChild(labelP);
+
+        const valueP = document.createElement('p');
+        valueP.className = 'font-medium text-gray-800';
+
+        if (isUrl && typeof value === 'string' && value.startsWith('http')) {
+            const link = document.createElement('a');
+            link.href = value;
+            link.target = '_blank';
+            link.textContent = 'Ver Archivo'; // Or use a more descriptive text, or the URL itself
+            link.className = 'text-blue-600 hover:text-blue-700 underline';
+            valueP.appendChild(link);
+        } else {
+            valueP.textContent = value || '-';
+        }
+        wrapperDiv.appendChild(valueP);
+        detailsContainer.appendChild(wrapperDiv);
+    };
+
+    // Append Standard/Core Fields
+    appendDetail('Nombre del Archivo', doc.nombre_original || doc.nombre || '-');
+    appendDetail('Categoría del Documento', doc.tipo_documento || '-');
+    appendDetail('Fecha de Subida', doc.fecha_subida ? formatDate(doc.fecha_subida) : '-');
+    appendDetail('Estado', doc.estado || '-');
+    if(doc.rut_asociado) appendDetail('RUT Asociado', doc.rut_asociado);
+    if(doc.responsiblePerson || doc.usuario_responsable) appendDetail('Responsable', doc.responsiblePerson || doc.usuario_responsable);
+    if(doc.documentDescription || doc.descripcion) appendDetail('Notas', doc.documentDescription || doc.descripcion);
+
+
+    // Append Dynamic Fields from doc.additional_data
+    if (doc.additional_data && typeof doc.additional_data === 'object' && Object.keys(doc.additional_data).length > 0) {
+        const separator = document.createElement('hr');
+        separator.className = 'my-4'; // Add some margin for visual separation
+        detailsContainer.appendChild(separator);
+
+        const additionalDataHeader = document.createElement('p');
+        additionalDataHeader.className = 'text-md font-semibold text-gray-700 mb-2';
+        additionalDataHeader.textContent = 'Información Adicional';
+        detailsContainer.appendChild(additionalDataHeader);
+
+        Object.entries(doc.additional_data).forEach(([key, value]) => {
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const isValueUrl = typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
+            appendDetail(formattedKey, value, isValueUrl);
+        });
+    }
+
+    // Mostrar el documento en el visor principal (iframe part)
+    // Usar la URL directa del archivo si está disponible
+    let fileUrl;
+    if (doc.url_archivo) {
+        fileUrl = doc.url_archivo;
+    } else {
+        // Construir URL correctamente usando el bucket de Firebase
+        const bucketName = firebase.app().options.storageBucket;
+        const encodedPath = encodeURIComponent(doc.ruta_archivo);
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+    }
     
     const iframe = document.getElementById('documentIframe');
     iframe.src = fileUrl;
@@ -238,28 +385,56 @@ function viewDocument(document) {
 }
 
 // Función para descargar documento
-function downloadDocument(documentId) {
-    fetch(`/api/documentos/${documentId}/download`)
-        .then(response => {
-            if (response.ok) {
-                return response.blob();
+async function downloadDocument(documentId) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('No se encontró el token.'); // Updated error message
+        alert('Error de autenticación. Por favor, inicie sesión de nuevo.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/documentos/${documentId}/download`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
-            throw new Error('Error al descargar el documento');
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `documento_${documentId}`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        })
-        .catch(error => {
-            console.error('Error al descargar:', error);
-            alert('Error al descargar el documento');
         });
+
+        if (!response.ok) {
+            // Intentar obtener más información del error si está en formato JSON
+            let errorBody = null;
+            try {
+                errorBody = await response.json();
+            } catch (e) {
+                // No es JSON o hubo otro error
+            }
+            console.error('Error en la respuesta del servidor:', response.status, errorBody);
+            throw new Error(errorBody?.message || `Error HTTP: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `documento_${documentId}`; // Default filename
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+            if (filenameMatch && filenameMatch.length > 1) {
+                filename = filenameMatch[1];
+            }
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+    } catch (error) {
+        console.error('Error al descargar el documento:', error);
+        alert(`Error al descargar el documento: ${error.message}`);
+    }
 }
 
 // Función para obtener icono según tipo de archivo
@@ -286,18 +461,49 @@ function formatFileSize(bytes) {
 }
 
 // Función para mostrar un documento específico (función original mantenida para compatibilidad)
-function showDocument(documentId) {
-    fetch(`/api/documentos/${documentId}`)
-        .then(response => response.json())
-        .then(document => {
-            document.getElementById('docType').textContent = document.nombre_tipo_documento || document.nombre;
-            
-            // Mostrar el documento desde Firebase Storage
-            const iframe = document.getElementById('documentIframe');
-            iframe.src = document.url_archivo;
-            document.getElementById('documentPreviewContent').classList.remove('hidden');
-            document.getElementById('preview-placeholder').classList.add('hidden');
+async function showDocument(documentId) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('No se encontró el token.'); // Updated error message
+        // Actualizar UI para reflejar el error de autenticación
+        document.getElementById('docType').textContent = 'Error de autenticación';
+        const iframe = document.getElementById('documentIframe');
+        iframe.src = 'about:blank'; // Limpiar iframe
+        document.getElementById('documentPreviewContent').classList.remove('hidden');
+        document.getElementById('preview-placeholder').classList.add('hidden'); // O mostrar un placeholder de error
+        alert('Error de autenticación. Por favor, inicie sesión de nuevo.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/documentos/${documentId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
         });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+
+        const documentData = await response.json(); // Renombrado para evitar conflicto con 'document' global
+        
+        document.getElementById('docType').textContent = documentData.nombre_tipo_documento || documentData.nombre;
+        
+        // Mostrar el documento desde Firebase Storage
+        const iframe = document.getElementById('documentIframe');
+        iframe.src = documentData.url_archivo; // Asumiendo que la API devuelve la URL directa
+        document.getElementById('documentPreviewContent').classList.remove('hidden');
+        document.getElementById('preview-placeholder').classList.add('hidden');
+
+    } catch (error) {
+        console.error('Error al mostrar el documento:', error);
+        document.getElementById('docType').textContent = 'Error al cargar documento';
+        const iframe = document.getElementById('documentIframe');
+        iframe.src = 'about:blank';
+        // Considera mostrar un mensaje de error más específico en la UI
+        alert('Error al cargar el documento. Por favor, intenta de nuevo.');
+    }
 }
 
 // Función para cerrar el modal
@@ -365,7 +571,13 @@ function getStatusLabel(status) {
 }
 
 function formatDate(dateString) {
+    if (!dateString) {
+        return '-'; // Or 'Fecha no disponible'
+    }
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) { // Check for invalid date
+        return '-'; // Or 'Fecha no disponible'
+    }
     return date.toLocaleDateString('es-ES');
 }
 
@@ -418,69 +630,100 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Función para cargar los predios
-function loadProperties() {
+async function loadProperties() {
+    const token = localStorage.getItem('token');
+    const propertiesGrid = document.getElementById('properties-grid');
+
+    if (!token) {
+        console.error('No se encontró el token.'); // Updated error message
+        if (propertiesGrid) {
+            propertiesGrid.innerHTML = `
+                <div class="col-span-full text-center py-10">
+                    <p class="text-red-500 text-lg">Error de autenticación. No se pueden cargar los predios.</p>
+                    <p class="text-gray-500 text-sm">Por favor, inicie sesión de nuevo.</p>
+                </div>
+            `;
+        }
+        // Actualizar contadores a 0 o un mensaje indicativo
+        const propertiesCountEl = document.getElementById('properties-count');
+        const totalPropertiesEl = document.getElementById('total-properties');
+        if (propertiesCountEl) propertiesCountEl.textContent = '0';
+        if (totalPropertiesEl) totalPropertiesEl.textContent = '0';
+        return;
+    }
+
     const filterStatus = document.getElementById('filter-status')?.value || 'all';
     const sortBy = document.getElementById('sort-by')?.value || 'name-asc';
     
-    // Obtener los predios desde la API
-    fetch('/api/predios')
-        .then(response => response.json())
-        .then(properties => {
-            // Filtrar predios según el estado seleccionado
-            let filteredProperties = properties;
-            if (filterStatus !== 'all') {
-                filteredProperties = properties.filter(property => {
-                    // Implementar lógica de filtrado según tus necesidades
-                    if (filterStatus === 'pending') {
-                        return property.hasPendingDocs;
-                    } else if (filterStatus === 'complete') {
-                        return property.hasCompleteDocs && !property.hasPendingDocs && !property.hasMissingDocs;
-                    }
-                    return true;
-                });
-            }
-            
-            // Ordenar predios
-            filteredProperties.sort((a, b) => {
-                if (sortBy === 'name-asc') {
-                    // Verificar si las propiedades name existen
-                    const nameA = a.name || a.nombre || '';
-                    const nameB = b.name || b.nombre || '';
-                    return nameA.localeCompare(nameB);
-                } else if (sortBy === 'name-desc') {
-                    // Verificar si las propiedades name existen
-                    const nameA = a.name || a.nombre || '';
-                    const nameB = b.name || b.nombre || '';
-                    return nameB.localeCompare(nameA);
-                } else if (sortBy === 'date-desc') {
-                    // Usar fecha de creación o fecha de subida si está disponible
-                    const dateA = a.createdAt || a.fecha_creacion || a.fecha_subida || new Date(0);
-                    const dateB = b.createdAt || b.fecha_creacion || b.fecha_subida || new Date(0);
-                    return new Date(dateB) - new Date(dateA);
-                }
-                return 0;
-            });
-            
-            // Actualizar contadores
-            const propertiesCount = document.getElementById('properties-count');
-            const totalProperties = document.getElementById('total-properties');
-            if (propertiesCount) propertiesCount.textContent = filteredProperties.length;
-            if (totalProperties) totalProperties.textContent = properties.length;
-            
-            // Renderizar los predios
-            renderProperties(filteredProperties);
-        })
-        .catch(error => {
-            console.error('Error al cargar los predios:', error);
-            const propertiesGrid = document.getElementById('properties-grid');
-            if (propertiesGrid) {
-                propertiesGrid.innerHTML = `
-                    <div class="col-span-full text-center py-10">
-                        <p class="text-gray-500 text-lg">Error al cargar los predios. Por favor, intenta de nuevo más tarde.</p>
-                    </div>
-                `;
+    try {
+        // Obtener los predios desde la API
+        const response = await fetch('/api/predios', {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
         });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        const properties = await response.json();
+        
+        // Filtrar predios según el estado seleccionado
+        let filteredProperties = properties;
+        if (filterStatus !== 'all') {
+            filteredProperties = properties.filter(property => {
+                // Implementar lógica de filtrado según tus necesidades
+                if (filterStatus === 'pending') {
+                    return property.hasPendingDocs;
+                } else if (filterStatus === 'complete') {
+                    return property.hasCompleteDocs && !property.hasPendingDocs && !property.hasMissingDocs;
+                }
+                return true; // Default case if filterStatus is not recognized beyond 'all', 'pending', 'complete'
+            });
+        }
+        
+        // Ordenar predios
+        filteredProperties.sort((a, b) => {
+            const nameA = a.name || a.nombre || ''; // Robust access to name
+            const nameB = b.name || b.nombre || ''; // Robust access to name
+            const dateA = a.createdAt || a.fecha_creacion || a.fecha_subida || 0; // Robust access to date
+            const dateB = b.createdAt || b.fecha_creacion || b.fecha_subida || 0; // Robust access to date
+
+            if (sortBy === 'name-asc') {
+                return nameA.localeCompare(nameB);
+            } else if (sortBy === 'name-desc') {
+                return nameB.localeCompare(nameA);
+            } else if (sortBy === 'date-desc') {
+                return new Date(dateB) - new Date(dateA);
+            }
+            return 0;
+        });
+        
+        // Actualizar contadores
+        const propertiesCount = document.getElementById('properties-count');
+        const totalProperties = document.getElementById('total-properties');
+        if (propertiesCount) propertiesCount.textContent = filteredProperties.length;
+        if (totalProperties) totalProperties.textContent = properties.length;
+        
+        // Renderizar los predios
+        renderProperties(filteredProperties);
+
+    } catch (error) {
+        console.error('Error al cargar los predios:', error);
+        if (propertiesGrid) {
+            propertiesGrid.innerHTML = `
+                <div class="col-span-full text-center py-10">
+                    <p class="text-red-500 text-lg">Error al cargar los predios: ${error.message}.</p>
+                    <p class="text-gray-500 text-sm">Por favor, intenta de nuevo más tarde.</p>
+                </div>
+            `;
+        }
+         // Actualizar contadores a 0 o un mensaje indicativo en caso de error
+        const propertiesCountEl = document.getElementById('properties-count');
+        const totalPropertiesEl = document.getElementById('total-properties');
+        if (propertiesCountEl) propertiesCountEl.textContent = '0';
+        if (totalPropertiesEl) totalPropertiesEl.textContent = '0';
+    }
 }
 
 // Función para renderizar los predios en la UI

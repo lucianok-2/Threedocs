@@ -5,27 +5,27 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
-const jwt = require('jsonwebtoken');
 
-// Middleware para verificar token
-function verificarToken(req, res, next) {
-  // Obtener token del header Authorization, query params o cookies
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1] || 
-                req.query.token || 
-                req.cookies.token;
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Token requerido' });
-  }
-  
+
+
+// Middleware para verificar el Firebase ID Token
+async function verificarToken(req, res, next) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.usuario = decoded;
+    const bearer = req.headers.authorization;
+    const token = bearer?.startsWith('Bearer ')
+      ? bearer.split(' ')[1]
+      : req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Token requerido' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.usuario = decoded;  // uid, email, customClaims...
     next();
-  } catch (error) {
-    console.error('Error al verificar token:', error);
-    return res.status(401).json({ error: 'Token inválido' });
+  } catch (err) {
+    console.error('Error al verificar ID Token de Firebase:', err);
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }
 
@@ -71,28 +71,64 @@ const upload = multer({
   }
 });
 
+// Ruta para obtener los tipos de documentos
+router.get('/types', async (req, res) => {
+  try {
+    const documentTypesSnapshot = await db.collection('document_types').get();
+    const documentTypes = [];
+    documentTypesSnapshot.forEach(doc => {
+      documentTypes.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    res.json(documentTypes);
+  } catch (error) {
+    console.error('Error al obtener tipos de documento:', error);
+    res.status(500).json({ error: 'Error al obtener tipos de documento' });
+  }
+});
+
 // Ruta para subir un documento
 router.post('/upload', upload.single('documentFile'), async (req, res) => {
   try {
-    // Verificar que se haya subido un archivo
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+    // First, determine originalName, mimeType, fileSize, and if we are in a "fileless" (URL-based) scenario
+    let originalName, mimeType, fileSize;
+    const isFilelessUpload = req.body.fileUrl && req.body.originalName && req.body.mimeType && req.body.fileSize;
+
+    if (isFilelessUpload) {
+        originalName = req.body.originalName;
+        mimeType = req.body.mimeType;
+        fileSize = parseInt(req.body.fileSize, 10); // Ensure size is an integer
+    } else if (req.file) {
+        originalName = req.file.originalname;
+        mimeType = req.file.mimetype;
+        fileSize = req.file.size;
+    } else {
+        // If neither fileUrl info nor req.file is present, then it's an error.
+        return res.status(400).json({ error: 'No se ha subido ningún archivo ni proporcionado una URL de archivo.' });
     }
     
     // Verificar que se hayan enviado todos los datos necesarios
-    if (!req.body.documentName || !req.body.documentTypeId || !req.body.propertyId) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    if (!req.body.documentTypeNameForUpload || !req.body.propertyId) {
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Faltan datos requeridos: documentTypeNameForUpload o propertyId' });
     }
     
+    const receivedDocumentTypeName = req.body.documentTypeNameForUpload;
+
     // Verificar que el predio exista y pertenezca al usuario
     const predioRef = db.collection('predios').doc(req.body.propertyId);
     const predioDoc = await predioRef.get();
     
     if (!predioDoc.exists) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
     
@@ -100,64 +136,89 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     // Verificar que el predio pertenezca al usuario actual
     if (predioData.id_user !== req.usuario.uid) {
-      // Eliminar el archivo temporal
-      fs.unlinkSync(req.file.path);
+      // Eliminar el archivo temporal si existe
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(403).json({ error: 'No tienes permiso para subir documentos a este predio' });
     }
     
-    // Leer el archivo
-    const fileBuffer = fs.readFileSync(req.file.path);
+    // Client has already uploaded the file to: documents/${req.body.propertyId}/${req.body.fileHash}/${req.file.originalname}
+    // Client provides the direct download URL as req.body.fileUrl
+
+    // Use client's file hash. The server-calculated one is removed as we don't read file buffer.
+    const clientFileHash = req.body.fileHash; 
+    if (!clientFileHash && !isFilelessUpload) { // Hash is expected if req.file was processed by client, or if fileless.
+                                          // If it's a direct server upload (req.file but not isFilelessUpload), 
+                                          // and client didn't send hash, it's an issue.
+      // For now, we'll proceed, but this indicates an issue with client data if not purely server-handled upload.
+      console.warn("Client-side fileHash not provided in req.body.fileHash. Ensure client sends 'fileHash' for pre-hashed files.");
+      // Potentially: if (req.file) fs.unlinkSync(req.file.path);
+      // return res.status(400).json({ error: 'Client-side file hash is missing for pre-processed file.' });
+    }
     
-    // Generar hash SHA-256 del archivo
-    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-    
-    // Generar nombre único para el archivo
-    const fileName = `${Date.now()}_${path.basename(req.file.originalname)}`;
-    const filePath = `documentos/${req.usuario.uid}/${req.body.propertyId}/${fileName}`;
-    
-    // Subir archivo a Firebase Storage
-    const bucket = admin.storage().bucket();
-    const file = bucket.file(filePath);
-    
-    await file.save(fileBuffer, {
-      metadata: {
-        contentType: req.file.mimetype,
-        metadata: {
-          originalName: req.file.originalname,
-          uploadedBy: req.usuario.uid,
-          propertyId: req.body.propertyId,
-          documentType: req.body.documentTypeId
-        }
-      }
-    });
-    
-    // Generar URL de descarga
-    const [downloadURL] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-09-2491' // Fecha muy lejana para URL permanente
-    });
-    
+    // Use the determined originalName for clientStoragePath
+    const clientStoragePath = `documents/${req.body.propertyId}/${clientFileHash || 'unknown_hash'}/${originalName}`;
+
     // Crear el documento en la base de datos
     const documentData = {
-      nombre: req.body.documentName,
+      nombre: receivedDocumentTypeName, // Document's own name is the type name
       id_predio: req.body.propertyId,
-      id_user: req.usuario.uid,
-      tipo_documento: parseInt(req.body.documentTypeId),
-      fecha_subida: new Date(),
-      fecha_creacion: new Date(),
-      ruta_archivo: filePath,
-      url_archivo: downloadURL,
-      hash: fileHash,
-      tipo_archivo: req.file.mimetype,
-      tamano: req.file.size,
-      nombre_original: req.file.originalname,
-      estado: 'completo'
+      id_user: req.usuario.uid, // from token middleware
+      tipo_documento: receivedDocumentTypeName, // Store the NAME here
+      fecha_subida: req.body.uploadDate ? new Date(req.body.uploadDate) : new Date(), // Use client's uploadDate or current
+      fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
+      ruta_archivo: clientStoragePath, 
+      url_archivo: isFilelessUpload ? req.body.fileUrl : '', // If not fileless, URL might be generated later or not set
+      hash: clientFileHash, // Hash from client (or could be calculated server-side if not fileless and not provided)
+      tipo_archivo: mimeType, // Use determined mimeType
+      tamano: fileSize,       // Use determined fileSize
+      nombre_original: originalName, // Use determined originalName
+      estado: 'completo', // Default state
+      responsiblePerson: req.body.responsiblePerson || '', // Static field
+      documentDescription: req.body.documentDescription || '' // Static field
     };
     
-    const docRef = await db.collection('documentos').add(documentData);
+    // Populate additional_data with dynamic fields
+    const additional_data = {};
+    const knownFields = [
+      'documentTypeNameForUpload', 'propertyId', 'documentFile', // Updated documentTypeId to documentTypeNameForUpload
+      'responsiblePerson', 'documentDescription', 'fileHash', 
+      'userId', 'uploadDate',
+      'id_predio', 'tipo_documento' 
+    ];
     
-    // Eliminar el archivo temporal
-    fs.unlinkSync(req.file.path);
+    // Add safety check for req.body
+    if (req.body && typeof req.body === 'object') {
+      for (const key in req.body) {
+        if (Object.prototype.hasOwnProperty.call(req.body, key) && !knownFields.includes(key)) {
+          if (!documentData.hasOwnProperty(key)) {
+            additional_data[key] = req.body[key];
+          }
+        }
+      }
+    }
+    documentData.additional_data = additional_data;
+    
+    const docRef = await db.collection('documentos').add(documentData);
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'UPLOAD_DOCUMENT',
+        entityType: 'document',
+        entityId: docRef.id,
+        details: {
+          fileName: documentData.nombre_original,
+          idPredio: documentData.id_predio
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for upload document:', historyError);
+    }
+    // Eliminar el archivo temporal si existe (e.g. if it was a fallback scenario)
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
     
     res.status(201).json({
       _id: docRef.id,
@@ -166,8 +227,8 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
   } catch (error) {
     console.error('Error al subir documento:', error);
     
-    // Eliminar el archivo temporal si existe
-    if (req.file && fs.existsSync(req.file.path)) {
+    // Eliminar el archivo temporal si existe y el path is valid
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     
@@ -184,7 +245,7 @@ router.get('/buscar', async (req, res) => {
       .where('id_user', '==', req.usuario.uid);
     
     if (tipo_documento) {
-      query = query.where('tipo_documento', '==', parseInt(tipo_documento));
+      query = query.where('tipo_documento', '==', tipo_documento); // Removed parseInt
     }
     
     if (id_predio) {
@@ -347,6 +408,20 @@ router.delete('/:id', async (req, res) => {
     // Eliminar documento de Firestore
     await docRef.delete();
     
+    try {
+      await addHistoryEntry({
+        userId: req.usuario.uid,
+        actionType: 'DELETE_DOCUMENT',
+        entityType: 'document',
+        entityId: req.params.id,
+        details: {
+          fileName: documentData.nombre_original,
+          idPredio: documentData.id_predio
+        }
+      });
+    } catch (historyError) {
+      console.error('Error adding history entry for delete document:', historyError);
+    }
     res.json({ message: 'Documento eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar documento:', error);
