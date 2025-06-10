@@ -127,10 +127,27 @@
         </form>
       </div>
     </div>
+    
+    <!-- The new Bulk Upload Modal -->
+    <div id="bulk-upload-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+            <button id="close-bulk-upload-modal" class="absolute top-0 right-0 mt-4 mr-4 text-2xl font-semibold leading-none hover:text-gray-700">&times;</button>
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">Carga Masiva de Documentos PDF</h3>
+            
+            <input type="file" id="bulk-file-input" accept="application/pdf" multiple class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none mb-4">
+            
+            <div id="bulk-upload-feedback" class="mb-4 p-4 border rounded-lg text-sm hidden"></div>
+            
+            <div class="flex justify-end space-x-2">
+                <button id="cancel-bulk-upload" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancelar</button>
+                <button id="process-bulk-files-button" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Procesar Archivos</button>
+            </div>
+        </div>
+    </div>
   </div>
 </div>
 <script src="/firebase-config.js"></script>
-
+<script src="/gemini-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 <script src="/js/modals.js"></script>

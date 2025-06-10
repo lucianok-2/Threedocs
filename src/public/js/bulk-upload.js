@@ -1,6 +1,5 @@
 // Configuración de Firebase y Gemini
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent';
+const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // Variables para almacenar archivos seleccionados
 let selectedFiles = [];
@@ -63,20 +62,25 @@ async function fileToBase64(file) {
 
 // Función para procesar texto con Gemini
 async function processWithGemini(base64PDF) {
-  const response = await fetch(GEMINI_API_ENDPOINT, {
+  const apiKey = window.geminiConfig.apiKey;
+  const prompt = window.geminiConfig.prompt;
+
+  const response = await fetch(`${GEMINI_API_ENDPOINT}?key=${apiKey}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GEMINI_API_KEY}`
     },
     body: JSON.stringify({
       contents: [{
-        parts: [{
-          inlineData: {
-            mimeType: 'application/pdf',
-            data: base64PDF
+        parts: [
+          { "text": prompt },
+          {
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: base64PDF
+            }
           }
-        }]
+        ]
       }]
     })
   });
@@ -98,7 +102,38 @@ processBulkFilesButton.addEventListener('click', async () => {
     for (const file of selectedFiles) {
       const base64PDF = await fileToBase64(file);
       const result = await processWithGemini(base64PDF);
-      console.log(`Resultado para ${file.name}:`, result);
+      
+      let cleanedText = '';
+      if (result.candidates && result.candidates.length > 0 &&
+          result.candidates[0].content && 
+          result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0 &&
+          result.candidates[0].content.parts[0].text) {
+        const geminiJsonString = result.candidates[0].content.parts[0].text;
+        const cleanedJsonString = geminiJsonString.replace(/^```json\s*|\s*```$/g, '');
+        try {
+          const geminiOutput = JSON.parse(cleanedJsonString);
+          if (geminiOutput && typeof geminiOutput.texto_completo_limpio === 'string') {
+            cleanedText = geminiOutput.texto_completo_limpio;
+          } else {
+            console.error(`Gemini output JSON for ${file.name} does not contain 'texto_completo_limpio' or it's not a string:`, geminiOutput);
+            console.error("Parsed from this string:", cleanedJsonString); 
+          }
+        } catch (e) {
+          console.error(`Failed to parse potentially cleaned JSON response from Gemini for ${file.name}:`, e);
+          console.error("Attempted to parse (after cleaning markdown):", cleanedJsonString);
+          if (cleanedJsonString !== geminiJsonString) {
+            console.error("Original raw string from Gemini (before cleaning):", geminiJsonString);
+          }
+        }
+      } else {
+        console.error(`Could not extract JSON string from Gemini response for file ${file.name}`, result);
+      }
+
+      const outputJson = {
+        "nombre_archivo": file.name,
+        "texto_extraido": cleanedText
+      };
+      console.log(outputJson);
     }
 
     showFeedback('Procesamiento completado', 'success');

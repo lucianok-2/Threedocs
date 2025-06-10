@@ -92,7 +92,10 @@ app.use('/firebase-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.firebaseConfig = ${JSON.stringify(firebaseConfig)}`);
 });
-const geminiConfig = { apiKey: process.env.GEMINI_API_KEY || '' };
+const geminiConfig = { 
+  apiKey: process.env.GEMINI_API_KEY,
+  prompt: "Eres un asistente experto en OCR de documentos PDF. Tu tarea principal es extraer todo el texto del siguiente documento de la manera más precisa y completa posible. Durante el proceso de extracción, realiza una limpieza exhaustiva del texto para eliminar cualquier carácter, símbolo o formato que no sea parte del contenido textual relevante (por ejemplo, ruido de escaneo, artefactos de conversión). El objetivo es obtener un bloque de texto limpio y legible, donde los saltos de párrafo y las líneas nuevas se representen como tales. Formatea tu respuesta final como un objeto JSON que contenga una única clave 'texto_completo_limpio' y cuyo valor sea el texto extraído y depurado del documento, con los saltos de línea preservados como caracteres de nueva línea reales dentro del string." 
+};
 app.use('/gemini-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.geminiConfig = ${JSON.stringify(geminiConfig)}`);

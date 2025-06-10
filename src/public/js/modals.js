@@ -140,16 +140,24 @@ window.modalHelpers.closeBulkUploadModal = function() {
   if (modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
-    // Limpiar el formulario
-    const form = document.getElementById('bulk-upload-form');
-    if (form) {
-      form.reset();
+
+    // Limpiar el input de archivos
+    const bulkFileInput = document.getElementById('bulk-file-input');
+    if (bulkFileInput) {
+      bulkFileInput.value = ''; // Clear the selected file
     }
-    // Limpiar el feedback
-    const feedback = document.getElementById('bulk-upload-feedback');
-    if (feedback) {
-      feedback.classList.add('hidden');
-      feedback.textContent = '';
+
+    // Limpiar y ocultar el feedback
+    const bulkUploadFeedback = document.getElementById('bulk-upload-feedback');
+    if (bulkUploadFeedback) {
+      bulkUploadFeedback.classList.add('hidden');
+      bulkUploadFeedback.textContent = '';
+    }
+
+    // Re-habilitar el botón de procesar
+    const processBulkFilesButton = document.getElementById('process-bulk-files-button');
+    if (processBulkFilesButton) {
+      processBulkFilesButton.disabled = false;
     }
   }
 };
