@@ -318,6 +318,16 @@ document.addEventListener('DOMContentLoaded', function () {
   if (closeModalBtn) closeModalBtn.addEventListener('click', resetAndHideModal);
   if (cancelModalUploadBtn) cancelModalUploadBtn.addEventListener('click', resetAndHideModal);
 
+  const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+  async function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]); // Get Base64 part
+        reader.onerror = error => reject(error);
+    });
+  }
 
   if (processAiBtn) { // AI button is now within the modal
     processAiBtn.addEventListener('click', async function() {
@@ -327,95 +337,61 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const file = fileInput.files[0];
+        const originalButtonText = this.textContent;
         this.disabled = true;
-        this.textContent = 'Procesando IA...'; // Update button text
+        this.textContent = 'Procesando con IA...';
         if (ocrLoadingIndicator) ocrLoadingIndicator.classList.remove('hidden');
 
         try {
-            const { data: { text } } = await Tesseract.recognize(
-                file,
-                'spa', // Spanish language
-                { 
-                    logger: m => console.log(m) // Optional: for progress logging
-                }
-            );
-            
-            window.ocrExtractedText = text; // Store full OCR text
-            console.log("OCR Result:", window.ocrExtractedText);
-
-            // --- Begin data extraction logic ---
-            let extractedDataForForm = {};
-            const ocrText = window.ocrExtractedText;
-
-            if (!ocrText || ocrText.trim() === "") {
-                alert("No se pudo extraer texto del documento o el texto está vacío. No se auto-rellenarán campos.");
-            } else if (!currentFieldsToCollect || currentFieldsToCollect.length === 0) {
-                console.log("No hay 'fieldsToCollect' definidos para este tipo de documento. No se auto-rellenarán campos.");
-                alert("OCR procesado exitosamente. No hay campos específicos definidos para auto-rellenar para este tipo de documento, puede llenarlos manualmente.");
-            } else {
-                currentFieldsToCollect.forEach(fieldName => {
-                    const regex = new RegExp(fieldName + "[\\s:=-]*([^\\n\\r]+)", "i");
-                    const match = ocrText.match(regex);
-
-                    if (match && match[1]) {
-                        let value = match[1].trim();
-                        value = value.replace(/\s+/g, ' '); // Normalize spaces
-                        extractedDataForForm[fieldName] = value;
-                    } else {
-                        console.log(`Campo "${fieldName}" no encontrado en el texto OCR.`);
-                    }
-                });
-                console.log("Datos extraídos para el formulario:", extractedDataForForm);
-                window.autoPopulateData = extractedDataForForm;
-
-                if (Object.keys(extractedDataForForm).length > 0) {
-                    alert("Procesamiento IA completo. Se intentará auto-rellenar el formulario con los datos extraídos.");
-                } else {
-                    alert("Procesamiento IA completado, pero no se encontraron datos para los campos especificados en el documento. Puede llenarlos manualmente.");
-                }
-
-                // --- Begin form population logic ---
-                if (window.autoPopulateData && Object.keys(window.autoPopulateData).length > 0) {
-                    console.log("Auto-populating form fields with:", window.autoPopulateData);
-
-                    const responsiblePersonElement = document.getElementById('document-responsible');
-                    const documentDescriptionElement = document.getElementById('document-description');
-
-                    for (const fieldNameKey in window.autoPopulateData) {
-                        const value = window.autoPopulateData[fieldNameKey];
-                        
-                        if (fieldNameKey.toLowerCase() === 'responsable' && responsiblePersonElement) {
-                            responsiblePersonElement.value = value;
-                        } else if (fieldNameKey.toLowerCase() === 'descripción' && documentDescriptionElement) {
-                            documentDescriptionElement.value = value;
-                        } else {
-                            // Could be a dynamic field
-                            const originalFieldName = currentFieldsToCollect.find(fn => fn.toLowerCase() === fieldNameKey.toLowerCase());
-                            if (originalFieldName) {
-                                const dynamicFieldId = `dynamic-field-${originalFieldName.replace(/\s+/g, '-').toLowerCase()}`;
-                                const dynamicFieldElement = document.getElementById(dynamicFieldId);
-                                if (dynamicFieldElement) {
-                                    dynamicFieldElement.value = value;
-                                }
-                            }
-                        }
-                    }
-                    console.log("Form population attempt complete.");
-                } else {
-                    console.log("No data extracted or available to auto-populate form fields.");
-                }
-                // --- End form population logic ---
+            if (!window.geminiConfig || !window.geminiConfig.apiKey || !window.geminiConfig.prompt) {
+                alert('La configuración de Gemini (API Key o Prompt) no está disponible. Verifique la configuración.');
+                console.error('Gemini config missing or incomplete:', window.geminiConfig);
+                return;
             }
-            // --- End data extraction logic ---
+            const { apiKey, prompt } = window.geminiConfig;
+
+            const base64Data = await fileToBase64(file);
+
+            const requestBody = {
+                contents: [{
+                    parts: [
+                        { text: prompt }, // Use the prompt from gemini-config.js
+                        { inline_data: { mime_type: 'application/pdf', data: base64Data } }
+                    ]
+                }]
+            };
+
+            const response = await fetch(`${GEMINI_API_ENDPOINT}?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('Error from Gemini API:', errorData);
+                throw new Error(`Error en la API de Gemini: ${response.statusText} - ${JSON.stringify(errorData)}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0].text) {
+                const extractedTextFromGemini = result.candidates[0].content.parts[0].text;
+                console.log("Texto extraído por Gemini:", extractedTextFromGemini);
+                alert("Extracción de texto con IA completada. Revise la consola para ver el resultado.");
+                // Note: Auto-population logic is removed as per subtask requirements.
+                // If `currentFieldsToCollect` was used for auto-population, its role here is diminished.
+            } else {
+                console.log("Respuesta inesperada de Gemini o texto no encontrado:", result);
+                alert("La extracción de texto con IA pudo haber fallado o el formato de respuesta es inesperado. Revise la consola.");
+            }
 
         } catch (error) {
-            console.error('Error durante el OCR:', error);
-            alert('Ocurrió un error durante el procesamiento con IA. Por favor, revise la consola para más detalles.');
-            window.ocrExtractedText = null; // Clear any previous result
-            window.autoPopulateData = {}; // Clear any auto-population data
+            console.error('Error durante el procesamiento con Gemini IA:', error);
+            alert(`Ocurrió un error durante el procesamiento con IA: ${error.message}. Por favor, revise la consola para más detalles.`);
         } finally {
             this.disabled = false;
-            this.textContent = 'Processar con IA'; // Reset button text
+            this.textContent = originalButtonText; // Restore original button text
             if (ocrLoadingIndicator) ocrLoadingIndicator.classList.add('hidden');
         }
     });
@@ -629,10 +605,15 @@ document.addEventListener('DOMContentLoaded', function () {
               processAiBtn.classList.add('hidden');
             }
 
+            // Recargar los documentos (if loadExistingDocuments is adapted or re-enabled)
+            // if (propertySelect.value) {
+            //   loadExistingDocuments(propertySelect.value); 
+            // }
             
             alert('Documento subido correctamente!');
             resetAndHideModal(); // Use the new helper function
-            
+            // Note: nextBtn on main page remains enabled if user wants to upload another for same property.
+            // If propertySelect itself needs reset, that would be extra logic outside this submission.
           }
         );
       } catch (error) {
