@@ -1,21 +1,55 @@
 document.addEventListener('DOMContentLoaded', function () {
-  let currentFieldsToCollect = [];
+  let currentFieldsToCollect = []; 
+  let allFetchedDocumentTypes = []; 
+  let allFetchedProperties = []; // To store properties for preview
+
   const propertySelect = document.getElementById('property-select');
-  const documentSection = document.getElementById('document-section');
-  const documentTypesContainer = document.getElementById('document-types-container');
+  console.log('Property Select Element:', propertySelect); 
+
+  // Main page elements for two-step UI
+  const nextBtn = document.getElementById('next-btn');
+  const propertyPreview = document.getElementById('property-preview');
+  const previewId = document.getElementById('preview-id');
+  const previewName = document.getElementById('preview-name');
+  const previewAddress = document.getElementById('preview-address');
+  const previewOwner = document.getElementById('preview-owner');
+  const bulkUploadButton = document.getElementById('bulk-upload-button');
+
+
+  // Modal and its form elements
   const uploadModal = document.getElementById('upload-modal');
-  const closeModalBtn = document.getElementById('close-modal');
-  const uploadForm = document.getElementById('upload-form');
+  const closeModalBtn = document.getElementById('close-modal'); // The 'X' button on the modal
+  const cancelModalUploadBtn = document.getElementById('cancel-modal-upload'); // The "Cancelar" button in modal footer
+  const uploadForm = document.getElementById('upload-form'); // The form tag inside the modal
+  
+  const modalPropertyName = document.getElementById('modal-property-name');
+  const documentTypeSelect = document.getElementById('document-type-select'); // Now inside modal
+  const dynamicDocumentFieldsContainer = document.getElementById('dynamic-document-fields-container'); // Now inside modal
+  
+  // Static fields within the modal form
+  const documentResponsibleInput = document.getElementById('document-responsible');
+  const documentDescriptionInput = document.getElementById('document-description');
+  
+  // Dropzone elements (already correctly referenced by ID, assumed to be in modal)
   const fileInput = document.getElementById('file-input');
   const browseFilesBtn = document.getElementById('browse-files');
   const dropzone = document.getElementById('dropzone');
-  const selectedFileText = document.getElementById('selected-file');
-  const cancelUploadBtn = document.getElementById('cancel-upload');
-  const submitUploadBtn = document.getElementById('submit-upload');
-  const processAiBtn = document.getElementById('process-ai-btn');
+  const selectedFileText = document.getElementById('selected-file'); // Actually the div for file name display
+  const removeFileBtn = document.getElementById('remove-file'); // The 'x' button for a selected file
+
+  // Hidden input fields (now inside modal form)
+  const propertyIdHiddenInput = document.getElementById('property-id');
+  const documentTypeIdHiddenInput = document.getElementById('document-type-id');
+  const documentTypeNameHiddenInput = document.getElementById('document-type-name');
+
+  // Buttons inside modal form
+  const submitUploadBtn = document.getElementById('submit-upload'); 
+  const processAiBtn = document.getElementById('process-ai-btn'); 
   const ocrLoadingIndicator = document.getElementById('ocr-loading-indicator');
 
-  
+  // const documentSection = document.getElementById('document-section'); // This element is removed/obsolete in new UI
+  // const mainFormFields = document.getElementById('main-form-fields'); // This container is obsolete, fields are directly in modal
+
   const token = localStorage.getItem('token');
 
   if (!token) {
@@ -25,185 +59,267 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Cargar la lista de predios
+  console.log('Before fetching predios...'); // Added console log
   fetch('/api/predios', {
     headers: {
       'Authorization': `Bearer ${token}`
     }
   })
     .then(response => {
+      console.log('Raw response object from /api/predios:', response); // Added console log
       if (!response.ok) {
         throw new Error('Error al cargar los predios');
       }
       return response.json();
     })
     .then(properties => {
+      console.log('Parsed properties data:', properties); 
+      allFetchedProperties = properties; // Store for later use in preview
       propertySelect.innerHTML = '<option value="">Seleccione un predio...</option>';
 
       if (properties.length === 0) {
+        console.log('No properties found (properties.length === 0).');
         const option = document.createElement('option');
         option.disabled = true;
         option.textContent = 'No hay predios disponibles';
         propertySelect.appendChild(option);
-
-        // Mostrar mensaje al usuario
         alert('No hay predios registrados. Por favor, cree un predio primero.');
-        // Opcionalmente redirigir a la página de predios
-        // window.location.href = '/properties';
       } else {
         properties.forEach(property => {
+          console.log('Processing property for dropdown:', property); 
           const option = document.createElement('option');
           option.value = property._id;
-          option.textContent = property.nombre;
+          option.textContent = property.nombre; // Assuming 'nombre' exists
           propertySelect.appendChild(option);
         });
       }
     })
     .catch(error => {
-      console.error('Error:', error);
+      console.error('Error fetching or processing predios:', error); 
       alert('Error al cargar los predios');
     });
 
-  // Variable para almacenar los tipos de documentos recuperados
-  let allFetchedDocumentTypes = [];
+  // Event listener for property selection (Main Page Logic)
+  propertySelect.addEventListener('change', function () {
+    const selectedPropertyId = this.value;
+    const selectedProperty = allFetchedProperties.find(p => p._id === selectedPropertyId);
 
-  // Mostrar tipos de documentos cuando se selecciona un predio
-  propertySelect.addEventListener('change', async function () {
-    const bulkUploadButton = document.getElementById('bulk-upload-button');
-    
-    if (this.value) {
-      documentSection.classList.remove('hidden');
+    if (selectedProperty) {
+      // Populate and show preview
+      if (previewId) previewId.textContent = selectedProperty._id;
+      if (previewName) previewName.textContent = selectedProperty.nombre || '--';
+      if (previewAddress) previewAddress.textContent = selectedProperty.direccion || '--'; // Assuming 'direccion' exists
+      if (previewOwner) previewOwner.textContent = selectedProperty.propietarioNombreCompleto || '--'; // Assuming 'propietarioNombreCompleto' exists
+      
+      if (propertyPreview) {
+        propertyPreview.classList.remove('hidden');
+      } else {
+        console.error('propertyPreview element not found');
+      }
+      
+      if (nextBtn) {
+        nextBtn.disabled = false;
+      } else {
+        console.error('nextBtn element not found');
+      }
+
       if (bulkUploadButton) {
         bulkUploadButton.classList.remove('hidden');
+      } else {
+        console.error('bulkUploadButton element not found');
       }
-      documentTypesContainer.innerHTML = ''; // Clear previous
-    
-      try {
-        const response = await fetch('/api/admin/document-types', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch document types: ${response.statusText}`);
-        }
-        allFetchedDocumentTypes = await response.json(); // Populate the higher-scoped variable
 
-        if (!allFetchedDocumentTypes || allFetchedDocumentTypes.length === 0) {
-          documentTypesContainer.innerHTML = '<p>No document types defined in the system.</p>';
-          return;
-        }
-
-        // Add a general header
-        const generalHeader = document.createElement('div');
-        generalHeader.className = 'col-span-full mb-4'; // Asegúrate que col-span-full es la clase correcta para tu layout (ej. grid)
-        generalHeader.innerHTML = '<h4 class="font-medium text-gray-700 mb-2">Documentación del Predio</h4>';
-        documentTypesContainer.appendChild(generalHeader);
-
-        allFetchedDocumentTypes.forEach(type => {
-          addDocumentTypeCard(type); // Pass the full type object
-        });
-
-        loadExistingDocuments(this.value); // This function will need access to allFetchedDocumentTypes
-
-      } catch (error) {
-        console.error('Error fetching document types:', error);
-        documentTypesContainer.innerHTML = '<p class="text-red-500">Error loading document types.</p>';
-        allFetchedDocumentTypes = []; // Reset on error
+      // Set the hidden property ID field within the modal's form
+      if (propertyIdHiddenInput) {
+        propertyIdHiddenInput.value = selectedPropertyId;
+      } else {
+        console.error('Hidden input with ID "property-id" (inside modal) not found.');
       }
     } else {
-      documentSection.classList.add('hidden');
-      allFetchedDocumentTypes = []; // Clear if no property selected
+      // No property selected or found
+      if (propertyPreview) {
+        propertyPreview.classList.add('hidden');
+      } else {
+        console.error('propertyPreview element not found for hiding');
+      }
+
+      if (nextBtn) {
+        nextBtn.disabled = true;
+      } else {
+        console.error('nextBtn element not found for disabling');
+      }
+
+      if (bulkUploadButton) {
+        bulkUploadButton.classList.add('hidden');
+      } else {
+        console.error('bulkUploadButton element not found for hiding');
+      }
+      
+      if (propertyIdHiddenInput) {
+        propertyIdHiddenInput.value = ''; // Clear hidden property ID
+      }
     }
   });
 
-  // Función para cargar documentos existentes
-  function loadExistingDocuments(propertyId) {
-    fetch(`/api/predios/${propertyId}/documentos`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
+  // Event listener for "Continuar" button
+  if (nextBtn) {
+    nextBtn.addEventListener('click', async function() {
+      const selectedPropertyId = propertySelect.value;
+      if (!selectedPropertyId) {
+        alert('Por favor, seleccione un predio primero.');
+        return;
       }
-    })
-      .then(response => response.json())
-      .then(documents => {
-        // Crear un mapa de documentos existentes (usando el ID de Firestore del tipo de documento)
-        const existingDocs = new Map(documents.map(doc => [doc.documentTypeId, doc]));
+      const selectedProperty = allFetchedProperties.find(p => p._id === selectedPropertyId);
+      if (!selectedProperty) {
+        alert('Predio seleccionado no encontrado. Por favor, recargue la página.');
+        return;
+      }
 
-        // Actualizar el estado de cada tarjeta de documento
-        allFetchedDocumentTypes.forEach(type => {
-          // Asegurarse de que el card exista antes de intentar modificarlo
-          const cardButton = document.querySelector(`[data-type-id="${type.id}"]`);
-          if (!cardButton) return; // Si no se encuentra el botón, pasar al siguiente tipo
+      if (modalPropertyName) modalPropertyName.textContent = selectedProperty.nombre || '--';
+      
+      // Reset and prepare modal form elements
+      if (uploadForm) uploadForm.reset(); // Resets all form fields including file input
+      if (selectedFileText) selectedFileText.classList.add('hidden'); // Hide file name display
+      if (documentTypeSelect) documentTypeSelect.innerHTML = '<option value="">Cargando tipos...</option>';
+      if (dynamicDocumentFieldsContainer) {
+        dynamicDocumentFieldsContainer.innerHTML = '';
+        dynamicDocumentFieldsContainer.classList.add('hidden');
+      }
+      // Hide specific form sections if necessary (though form.reset() might cover text inputs)
+      if (documentResponsibleInput) documentResponsibleInput.value = '';
+      if (documentDescriptionInput) documentDescriptionInput.value = '';
 
-          const card = cardButton.closest('.bg-white');
-          if (!card) return; // Si no se encuentra la tarjeta, pasar al siguiente tipo
-          
-          const existingDoc = existingDocs.get(type.id); // Usar el ID de Firestore (type.id)
 
-          if (existingDoc) {
-            // Documento existe
-            card.classList.remove('border-red-200');
-            card.classList.add('border-green-200');
-            card.querySelector('button').textContent = 'Ver documento';
-            card.querySelector('button').classList.remove('text-blue-600');
-            card.querySelector('button').classList.add('text-green-600');
-
-            // Agregar información del documento
-            const infoDiv = card.querySelector('.doc-info') || document.createElement('div');
-            infoDiv.className = 'doc-info mt-2 text-sm text-gray-600';
-            infoDiv.innerHTML = `
-            <p>Responsable: ${existingDoc.responsiblePerson}</p>
-            <p>Fecha: ${new Date(existingDoc.documentDate).toLocaleDateString()}</p>
-          `;
-            if (!card.querySelector('.doc-info')) card.appendChild(infoDiv);
-          } else {
-            // Documento faltante
-            card.classList.remove('border-green-200');
-            card.classList.add('border-red-200');
-            card.querySelector('button').textContent = 'Documento faltante - Subir';
-            card.querySelector('button').classList.remove('text-green-600');
-            card.querySelector('button').classList.add('text-red-600');
-          }
+      // Fetch document types for the modal's dropdown
+      try {
+        console.log('Fetching document types for modal...');
+        const response = await fetch('/api/admin/document-types', {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-      })
-      .catch(error => {
-        console.error('Error:', error);
-      });
-  }
+        if (!response.ok) throw new Error(`Error al cargar tipos de documento: ${response.statusText}`);
+        
+        allFetchedDocumentTypes = await response.json();
+        console.log('Fetched document types for modal:', allFetchedDocumentTypes);
 
-  // Función para agregar una tarjeta de tipo de documento
-  function addDocumentTypeCard(type) { // type is now an object like { id: 'firestoreId', name: 'Doc Name', ... }
-    const card = document.createElement('div');
-    card.className = 'bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow';
-    // Usar type.description si existe, o un placeholder
-    const description = type.description || 'Descripción no disponible.'; 
-    
-    card.innerHTML = `
-      <h5 class="font-medium text-gray-800 mb-1">${type.name}</h5>
-      <p class="text-xs text-gray-500 mb-2">${description}</p>
-      <button type="button" class="upload-doc-btn mt-2 text-blue-600 hover:text-blue-800 text-sm flex items-center" 
-              data-type-id="${type.id}" 
-              data-type-name="${type.name}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-        </svg>
-        Subir documento
-      </button>
-    `;
-    // Añadir data-fields-to-collect al botón
-    const uploadBtn = card.querySelector('.upload-doc-btn');
-    uploadBtn.dataset.fieldsToCollect = JSON.stringify(type.fieldsToCollect || []);
+        if (documentTypeSelect) {
+            documentTypeSelect.innerHTML = '<option value="">Seleccione un tipo de documento...</option>';
+            if (!allFetchedDocumentTypes || allFetchedDocumentTypes.length === 0) {
+                const option = document.createElement('option');
+                option.disabled = true;
+                option.textContent = 'No hay tipos de documentos definidos';
+                documentTypeSelect.appendChild(option);
+            } else {
+                allFetchedDocumentTypes.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.id;
+                    option.textContent = type.name;
+                    option.dataset.fieldsToCollect = JSON.stringify(type.fieldsToCollect || []);
+                    option.dataset.typeName = type.name;
+                    documentTypeSelect.appendChild(option);
+                });
+            }
+        }
+      } catch (error) {
+        console.error('Error fetching document types for modal:', error);
+        if (documentTypeSelect) documentTypeSelect.innerHTML = '<option value="">Error al cargar tipos</option>';
+        allFetchedDocumentTypes = [];
+      }
 
-
-    documentTypesContainer.appendChild(card);
-
-    // Agregar event listener al botón de subir
-    uploadBtn.addEventListener('click', function () {
-      const typeId = this.dataset.typeId;
-      const typeName = this.dataset.typeName;
-      const fieldsToCollect = JSON.parse(this.dataset.fieldsToCollect || '[]');
-      openUploadModal(typeId, typeName, fieldsToCollect);
+      if (uploadModal) uploadModal.classList.remove('hidden'); // Show the modal
     });
   }
 
-  if (processAiBtn) {
+  // Event listener for document type selection (Inside Modal)
+  if (documentTypeSelect) {
+    documentTypeSelect.addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+      const documentTypeId = this.value;
+
+      // Clear previous dynamic fields
+      if (dynamicDocumentFieldsContainer) {
+        dynamicDocumentFieldsContainer.innerHTML = '';
+        dynamicDocumentFieldsContainer.classList.add('hidden');
+      }
+      // Reset static fields visibility or content if needed, though they are part of the form now.
+      // Example: if (documentResponsibleInput) documentResponsibleInput.parentElement.parentElement.classList.add('hidden');
+
+
+      if (documentTypeId) {
+        const fieldsToCollect = JSON.parse(selectedOption.dataset.fieldsToCollect || '[]');
+        const typeName = selectedOption.dataset.typeName;
+        currentFieldsToCollect = fieldsToCollect; 
+
+        if (documentTypeIdHiddenInput) documentTypeIdHiddenInput.value = documentTypeId;
+        if (documentTypeNameHiddenInput) documentTypeNameHiddenInput.value = typeName;
+
+        // Generate dynamic fields
+        if (fieldsToCollect && fieldsToCollect.length > 0) {
+          const heading = document.createElement('h4'); // Add heading back if removed by innerHTML=''
+          heading.className = 'text-md font-semibold text-gray-700 mb-2';
+          heading.textContent = 'Campos Específicos del Documento:';
+          dynamicDocumentFieldsContainer.appendChild(heading);
+
+          fieldsToCollect.forEach(fieldName => {
+            if (fieldName.toLowerCase() === 'responsable' || fieldName.toLowerCase() === 'descripción') return;
+
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'mb-4'; // Each field in its own div
+
+            const label = document.createElement('label');
+            const fieldId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}`;
+            label.htmlFor = fieldId;
+            label.textContent = fieldName;
+            label.className = 'block text-gray-700 font-medium mb-2 required-field'; // Assuming all dynamic are required
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = fieldId;
+            input.name = fieldId;
+            input.className = 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500';
+            input.placeholder = `Ingrese ${fieldName}`;
+            input.required = true;
+
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
+            dynamicDocumentFieldsContainer.appendChild(fieldDiv);
+          });
+           if (dynamicDocumentFieldsContainer) dynamicDocumentFieldsContainer.classList.remove('hidden');
+        }
+         // Show static fields like Responsible, Description, Dropzone which are always part of the modal form
+        // These are not hidden/shown by this logic anymore, but are part of the modal's form structure.
+      } else {
+        // No document type selected
+        currentFieldsToCollect = [];
+        if (documentTypeIdHiddenInput) documentTypeIdHiddenInput.value = '';
+        if (documentTypeNameHiddenInput) documentTypeNameHiddenInput.value = '';
+      }
+    });
+  }
+  
+  // Modal Close and Cancel Logic
+  function resetAndHideModal() {
+    if (uploadModal) uploadModal.classList.add('hidden');
+    if (uploadForm) uploadForm.reset();
+    if (selectedFileText) selectedFileText.classList.add('hidden');
+    if (fileInput) fileInput.value = ''; // Clear file input specifically
+    if (dynamicDocumentFieldsContainer) {
+        dynamicDocumentFieldsContainer.innerHTML = '';
+        dynamicDocumentFieldsContainer.classList.add('hidden');
+    }
+    if (documentTypeSelect) documentTypeSelect.value = ''; // Reset dropdown
+    if (processAiBtn) processAiBtn.classList.add('hidden');
+    if (ocrLoadingIndicator) ocrLoadingIndicator.classList.add('hidden');
+    // Clear hidden fields related to document type
+    if (documentTypeIdHiddenInput) documentTypeIdHiddenInput.value = '';
+    if (documentTypeNameHiddenInput) documentTypeNameHiddenInput.value = '';
+    // Property ID hidden input should retain its value as the property selection on main page is still active.
+  }
+
+  if (closeModalBtn) closeModalBtn.addEventListener('click', resetAndHideModal);
+  if (cancelModalUploadBtn) cancelModalUploadBtn.addEventListener('click', resetAndHideModal);
+
+
+  if (processAiBtn) { // AI button is now within the modal
     processAiBtn.addEventListener('click', async function() {
         if (!fileInput || fileInput.files.length === 0 || fileInput.files[0].type !== 'application/pdf') {
             alert('Por favor, seleccione un archivo PDF primero.');
@@ -305,240 +421,116 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Función para abrir el modal de subida
-  function openUploadModal(typeId, typeName, fieldsToCollect) {
-    currentFieldsToCollect = fieldsToCollect; // Assign to the higher-scoped variable
-    console.log('Fields to collect for ' + typeName + ':', fieldsToCollect); // Log para verificar
+  // `openUploadModal` is no longer used to populate the main form. 
+  // It might be repurposed for bulk upload or other modal interactions.
+  // For now, its original functionality for single uploads is integrated into the 
+  // `documentTypeSelect` change listener.
 
-    // Clear previous OCR results and reset AI button state
-    window.ocrExtractedText = null;
-    window.autoPopulateData = {};
-    if (processAiBtn) {
-      processAiBtn.disabled = false;
-      processAiBtn.textContent = 'Processar con IA';
-      processAiBtn.classList.add('hidden'); // Initially hidden, shown on PDF selection
-    }
-    if (ocrLoadingIndicator) {
-      ocrLoadingIndicator.classList.add('hidden');
-    }
-
-    // El resto de la lógica para abrir el modal permanece, pero no se usa window.modalHelpers
-    // ya que la tarea especifica actualizar solo openUploadModal en upload.js
-    const modalTitleText = document.getElementById('modal-title-text'); // Usar el span dentro del h3
-    const documentTypeIdInput = document.getElementById('document-type-id');
-    const propertyIdInput = document.getElementById('property-id');
-
-    if (modalTitleText) modalTitleText.textContent = `Subir: ${typeName}`;
-    if (documentTypeIdInput) documentTypeIdInput.value = typeId;
-
-    const documentTypeNameInput = document.getElementById('document-type-name');
-    if (documentTypeNameInput) {
-        documentTypeNameInput.value = typeName;
-    } else {
-        console.error('CRITICAL: Hidden input with ID "document-type-name" not found in upload.handlebars. This field is required for sending the type name.');
-    }
-
-    if (propertyIdInput) propertyIdInput.value = propertySelect.value;
-
-    // Limpiar el formulario
-    if (uploadForm) uploadForm.reset();
-    if (selectedFileText) {
-      selectedFileText.classList.add('hidden');
-      selectedFileText.textContent = '';
-    }
-    
-    const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
-    if (dynamicFieldsContainer) {
-      dynamicFieldsContainer.innerHTML = ''; // Limpiar campos de una apertura anterior
-
-      const standardStaticFieldLabels = [
-        'Responsable', 
-        'Descripción'
-        // Ensure these labels exactly match the textContent of the <label> elements for
-        // document-responsible and document-description in upload.handlebars
-      ];
-
-      if (fieldsToCollect && fieldsToCollect.length > 0) {
-        fieldsToCollect.forEach((fieldName, index) => {
-          if (standardStaticFieldLabels.includes(fieldName)) return; // Skip if static
-
-          const fieldDiv = document.createElement('div');
-          fieldDiv.className = 'mb-4'; // Each field in its own div, can be md:col-span-1 if two per row
-
-          const label = document.createElement('label');
-          // New simplified ID generation, assuming fieldName is unique within fieldsToCollect
-          const fieldId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}`;
-          label.htmlFor = fieldId;
-          label.textContent = fieldName;
-
-          const input = document.createElement('input');
-          input.type = 'text'; // Default to text
-          input.id = fieldId;
-          input.name = fieldId; // Use fieldId as name for FormData
-          input.className = 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500';
-          input.placeholder = `Ingrese ${fieldName}`;
-
-          // Make 'archivo kmz' optional
-          if (fieldName.toLowerCase() === 'archivo kmz') {
-            input.required = false;
-            label.className = 'block text-gray-700 font-medium mb-2'; // Not required
-          } else {
-            input.required = true;
-            label.className = 'block text-gray-700 font-medium mb-2 required-field'; // Required
-          }
-
-          fieldDiv.appendChild(label);
-          fieldDiv.appendChild(input);
-          dynamicFieldsContainer.appendChild(fieldDiv);
-        });
-      }
-    }
-
-    if (uploadModal) uploadModal.classList.remove('hidden');
-  }
-
-  // Cerrar el modal
-  if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', function () {
-      if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
-        window.modalHelpers.closeUploadModal();
-      } else {
-        if (uploadModal) uploadModal.classList.add('hidden');
-      }
-        if (processAiBtn) {
-          processAiBtn.classList.add('hidden');
-        }
-    });
-  }
-
-  if (cancelUploadBtn) {
-    cancelUploadBtn.addEventListener('click', function () {
-      if (window.modalHelpers && window.modalHelpers.closeUploadModal) {
-        window.modalHelpers.closeUploadModal();
-      } else {
-        if (uploadModal) uploadModal.classList.add('hidden');
-      }
-        if (processAiBtn) {
-          processAiBtn.classList.add('hidden');
-        }
-    });
-  }
-
-  // Manejar la selección de archivos
+  // File input and dropzone logic (elements are inside the modal)
   if (browseFilesBtn) {
-    browseFilesBtn.addEventListener('click', function () {
-      if (fileInput) fileInput.click();
-    });
+    browseFilesBtn.addEventListener('click', () => fileInput.click());
   }
 
   if (fileInput) {
     fileInput.addEventListener('change', function () {
-      if (this.files.length > 0 && selectedFileText) {
-        selectedFileText.textContent = `Archivo seleccionado: ${this.files[0].name}`;
-        selectedFileText.classList.remove('hidden');
-          if (this.files[0].type === 'application/pdf' && processAiBtn) {
-            processAiBtn.classList.remove('hidden');
-          } else if (processAiBtn) {
-            processAiBtn.classList.add('hidden');
-          }
-      } else if (selectedFileText) {
-        selectedFileText.classList.add('hidden');
-          if (processAiBtn) {
-            processAiBtn.classList.add('hidden');
-          }
-      }
-    });
-  }
-
-  // Manejar el arrastrar y soltar archivos
-  if (dropzone) {
-    dropzone.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      this.classList.add('border-blue-500');
-    });
-
-    dropzone.addEventListener('dragleave', function () {
-      this.classList.remove('border-blue-500');
-    });
-
-    dropzone.addEventListener('drop', function (e) {
-      e.preventDefault();
-      this.classList.remove('border-blue-500');
-
-      if (e.dataTransfer.files.length > 0 && fileInput && selectedFileText) {
-        fileInput.files = e.dataTransfer.files;
-        selectedFileText.textContent = `Archivo seleccionado: ${e.dataTransfer.files[0].name}`;
-        selectedFileText.classList.remove('hidden');
-        if (fileInput.files[0].type === 'application/pdf' && processAiBtn) {
+      const fileDisplayContainer = document.getElementById('selected-file'); // The div that contains file-name span and remove button
+      const fileNameSpan = document.getElementById('file-name');
+      
+      if (this.files.length > 0) {
+        if (fileNameSpan) fileNameSpan.textContent = this.files[0].name;
+        if (fileDisplayContainer) fileDisplayContainer.classList.remove('hidden');
+        if (this.files[0].type === 'application/pdf' && processAiBtn) {
           processAiBtn.classList.remove('hidden');
         } else if (processAiBtn) {
           processAiBtn.classList.add('hidden');
         }
+      } else {
+        if (fileDisplayContainer) fileDisplayContainer.classList.add('hidden');
+        if (processAiBtn) processAiBtn.classList.add('hidden');
+      }
+    });
+  }
+  
+  if (removeFileBtn) {
+    removeFileBtn.addEventListener('click', () => {
+        if (fileInput) fileInput.value = ''; // Clear the file input
+        const fileDisplayContainer = document.getElementById('selected-file');
+        if (fileDisplayContainer) fileDisplayContainer.classList.add('hidden');
+        if (processAiBtn) processAiBtn.classList.add('hidden');
+    });
+  }
+
+
+  if (dropzone) {
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.classList.add('border-blue-500');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-blue-500'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('border-blue-500');
+      if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        // Trigger change event on fileInput to update display
+        const event = new Event('change');
+        fileInput.dispatchEvent(event);
       }
     });
   }
 
-  // Mejorar el manejo del envío del formulario
+  // Form Submission Logic (operates on elements within the modal)
   if (uploadForm) {
     uploadForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      const formData = new FormData();
 
-      const formData = new FormData(); // Initialize FormData here
-
-      // Get references to elements that are definitely part of the static form
-      const responsiblePersonElement = document.getElementById('document-responsible');
-      const documentDescriptionElement = document.getElementById('document-description');
-      const typeIdElement = document.getElementById('document-type-id'); // Hidden
-      const propertyIdElement = document.getElementById('property-id');   // Hidden
-      const documentTypeNameElement = document.getElementById('document-type-name'); // New
-      // fileInput is from outer scope
-
-      const missingFieldsMessages = [];
-
-      // Validate static required fields
-      if (!responsiblePersonElement) {
-        missingFieldsMessages.push('Falta el campo: Responsable (elemento HTML no encontrado).');
-      } else if (!responsiblePersonElement.value.trim()) {
-        missingFieldsMessages.push('Responsable es requerido.');
-      }
-      
-      if (!fileInput) {
-        missingFieldsMessages.push('Falta el campo: Archivo (elemento HTML no encontrado).');
-      } else if (!fileInput.files || fileInput.files.length === 0) {
-        missingFieldsMessages.push('Archivo es requerido.');
-      }
-
-      // Validate existence of hidden fields (sanity check)
-      // if (!typeIdElement) missingFieldsMessages.push('Falta el campo oculto: Tipo de Documento ID.'); // No longer primary, but good to keep if used elsewhere
-      if (!propertyIdElement) missingFieldsMessages.push('Falta el campo oculto: ID de Predio.');
-      
-      // Crucial Validation for documentTypeNameElement
-      if (!documentTypeNameElement || !documentTypeNameElement.value) {
-        // missingFieldsMessages.push('Nombre del tipo de documento no capturado. Asegúrese que el campo oculto document-type-name exista y tenga valor.');
-        // Using alert directly as per subtask description for this specific critical error
-        alert('Error: Nombre del tipo de documento no capturado. Asegúrese que el campo oculto document-type-name exista y tenga valor.');
-        if (submitUploadBtn) {
-            submitUploadBtn.disabled = false;
-            submitUploadBtn.textContent = 'Subir Documento';
-        }
+      // Validate required fields (now using specific element vars)
+      if (!propertyIdHiddenInput || !propertyIdHiddenInput.value) { // Property ID from hidden input
+        alert('ID del predio no encontrado. Por favor, seleccione un predio nuevamente.');
         return;
       }
-
-
-      // Note: Dynamic fields added by `openUploadModal` have their own `required` attribute.
-      // The browser will enforce those. If any dynamic field is required and empty,
-      // the 'submit' event might not even fire, or this code could be extended
-      // to iterate over dynamic fields and check their `input.validity.valid`.
-      // For now, relying on browser validation for dynamic required fields.
-
-      if (missingFieldsMessages.length > 0) {
-        alert(`Por favor corrija los siguientes errores:\n\n- ${missingFieldsMessages.join('\n- ')}`);
+      if (!documentTypeSelect || !documentTypeSelect.value) {
+        alert('Por favor, seleccione un tipo de documento.');
         return;
+      }
+      if (!documentResponsibleInput || !documentResponsibleInput.value.trim()) {
+        alert('El campo Responsable es requerido.');
+        documentResponsibleInput.focus();
+        return;
+      }
+      if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        alert('Por favor, seleccione un archivo.');
+        return;
+      }
+      if (!documentTypeIdHiddenInput || !documentTypeIdHiddenInput.value) {
+         alert('Error: ID del tipo de documento no capturado. Intente seleccionar el tipo de nuevo.');
+         return;
+      }
+       if (!documentTypeNameHiddenInput || !documentTypeNameHiddenInput.value) {
+         alert('Error: Nombre del tipo de documento no capturado. Intente seleccionar el tipo de nuevo.');
+         return;
+      }
+      
+      // Dynamic field validation
+      let allDynamicFieldsValid = true;
+      if (dynamicDocumentFieldsContainer) {
+          const dynamicInputs = dynamicDocumentFieldsContainer.querySelectorAll('input[required], textarea[required], select[required]');
+          dynamicInputs.forEach(input => {
+              if (!input.value.trim()) {
+                  allDynamicFieldsValid = false;
+                  input.focus();
+              }
+          });
+      }
+      if (!allDynamicFieldsValid) {
+          alert('Por favor, complete todos los campos dinámicos requeridos.');
+          return;
       }
       
       const file = fileInput.files[0];
 
-      // Calcular el hash del archivo
+      // Calculate file hash
       const arrayBuffer = await file.arrayBuffer();
       const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -546,30 +538,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Crear FormData con todos los metadatos
       // formData.append('documentTypeId', typeIdElement.value); // Removed as per subtask
-      formData.append('documentTypeNameForUpload', documentTypeNameElement.value); // Added
-      formData.append('propertyId', propertyIdElement.value);
-      formData.append('documentFile', file); 
-      formData.append('responsiblePerson', responsiblePersonElement.value.trim());
+      formData.append('documentTypeId', documentTypeIdHiddenInput.value);
+      formData.append('documentTypeNameForUpload', documentTypeNameHiddenInput.value);
+      formData.append('propertyId', propertyIdHiddenInput.value);
+      formData.append('documentFile', file);
+      formData.append('responsiblePerson', documentResponsibleInput.value.trim());
       
-      if (documentDescriptionElement) { // Append description if element exists and has a value (optional)
-        formData.append('documentDescription', documentDescriptionElement.value.trim());
+      if (documentDescriptionInput && documentDescriptionInput.value.trim()) {
+        formData.append('documentDescription', documentDescriptionInput.value.trim());
       }
       formData.append('fileHash', hashHex);
-      formData.append('userId', JSON.parse(localStorage.getItem('user'))?.uid || 'unknown');
+      
+      const user = JSON.parse(localStorage.getItem('user'));
+      formData.append('userId', user?.uid || 'unknown');
       formData.append('uploadDate', new Date().toISOString());
 
       // Collect data from dynamic fields
-      const dynamicFieldsContainer = document.getElementById('dynamic-fields-container');
-      if (dynamicFieldsContainer) {
-        const dynamicInputs = dynamicFieldsContainer.querySelectorAll('input, textarea, select');
+      if (dynamicDocumentFieldsContainer) {
+        const dynamicInputs = dynamicDocumentFieldsContainer.querySelectorAll('input, textarea, select');
         dynamicInputs.forEach(input => {
-          if (input.name && input.value) {
-            formData.append(input.name, input.value);
+          if (input.name && input.value.trim()) {
+            formData.append(input.name, input.value.trim());
+          } else if (input.name && input.required && !input.value.trim()) {
+            console.warn(`Dynamic required field ${input.name} is empty.`);
+            // Potentially add to an error list here if not relying on browser validation alone
           }
         });
       }
-
-      // Deshabilitar el botón de envío
+      
+      // Disable submit button
       if (submitUploadBtn) {
         submitUploadBtn.disabled = true;
         submitUploadBtn.textContent = 'Subiendo...';
@@ -582,7 +579,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const storage = firebase.storage();
         // Usa el método ref() en lugar de bucket()
         const storageRef = storage.ref();
-        const fileRef = storageRef.child(`documents/${propertyIdElement.value}/${hashHex}/${file.name}`);
+        const fileRef = storageRef.child(`documents/${propertyIdHiddenInput.value}/${hashHex}/${file.name}`);
         
         // Y luego usa put() para subir el archivo
         const uploadTask = fileRef.put(file);
@@ -632,14 +629,14 @@ document.addEventListener('DOMContentLoaded', function () {
               processAiBtn.classList.add('hidden');
             }
 
-            // Recargar los documentos
-            if (propertySelect.value) {
-              loadExistingDocuments(propertySelect.value);
-            }
+            
+            alert('Documento subido correctamente!');
+            resetAndHideModal(); // Use the new helper function
+            
           }
         );
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error during document submission process:', error);
         alert('Error al subir el documento: ' + error.message);
       } finally {
         if (submitUploadBtn) {
