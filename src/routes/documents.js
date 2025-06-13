@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios'); // Make sure axios is installed
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -510,6 +511,78 @@ router.put('/:id', async (req, res) => {
     console.error('Error al actualizar documento:', error);
     res.status(500).json({ error: 'Error al actualizar el documento' });
   }
+});
+
+/**
+ * @swagger
+ * /classify-document:
+ *   post:
+ *     summary: Classifies the provided text using the Python ML service.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               text:
+ *                 type: string
+ *                 description: The text content to classify.
+ *                 example: "Este es el contenido de un contrato de trabajo."
+ *     responses:
+ *       200:
+ *         description: Classification successful. Returns the prediction from the ML model.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 prediction:
+ *                   type: string
+ *                 confidence:
+ *                   type: number
+ *                 all_probabilities:
+ *                   type: array
+ *                   items:
+ *                     type: array
+ *       400:
+ *         description: Bad request (e.g., missing 'text' field).
+ *       500:
+ *         description: Internal server error or error communicating with the classification service.
+ */
+router.post('/classify-document', async (req, res) => {
+    console.log(`[${new Date().toISOString()}] Received request for /api/documentos/classify-document`);
+    const { text } = req.body;
+
+    if (!text) {
+        console.warn(`[${new Date().toISOString()}] Bad request to /api/documentos/classify-document: Text field is missing`);
+        return res.status(400).json({ error: 'Text field is required' });
+    }
+
+    try {
+        const flaskServiceUrl = 'http://localhost:5000/classify';
+        console.log(`[${new Date().toISOString()}] Forwarding request to Flask service at ${flaskServiceUrl}`);
+        const response = await axios.post(flaskServiceUrl, { text });
+
+        console.log(`[${new Date().toISOString()}] Successfully received response from Flask service for /api/documentos/classify-document`);
+        res.status(response.status).json(response.data);
+
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] Error in /api/documentos/classify-document: ${error.message}`);
+        if (error.response) {
+            console.error(`[${new Date().toISOString()}] Flask service response error: Status ${error.response.status}`, error.response.data);
+            res.status(error.response.status).json({ 
+                error: 'Error from classification service', 
+                details: error.response.data 
+            });
+        } else if (error.request) {
+            console.error(`[${new Date().toISOString()}] No response from Flask service. Ensure it is running at http://localhost:5000/classify.`);
+            res.status(503).json({ error: 'Classification service unavailable. No response.' }); // 503 Service Unavailable
+        } else {
+            console.error(`[${new Date().toISOString()}] Axios request setup error:`, error.message);
+            res.status(500).json({ error: 'Internal server error setting up request to classification service' });
+        }
+    }
 });
 
 module.exports = router;

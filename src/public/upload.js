@@ -378,9 +378,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0].text) {
                 const extractedTextFromGemini = result.candidates[0].content.parts[0].text;
                 console.log("Texto extraído por Gemini:", extractedTextFromGemini);
-                alert("Extracción de texto con IA completada. Revise la consola para ver el resultado.");
-                // Note: Auto-population logic is removed as per subtask requirements.
-                // If `currentFieldsToCollect` was used for auto-population, its role here is diminished.
+                
+                // Call classifyDocumentText to route through Node.js backend
+                await classifyDocumentText(extractedTextFromGemini); 
+                // The classifyDocumentText function already logs results to the console.
+                // You can add an alert here if you want a popup in addition to console logs.
+                alert("Extracción de texto con IA y clasificación solicitada. Revise la consola para ver el resultado de la clasificación.");
+
             } else {
                 console.log("Respuesta inesperada de Gemini o texto no encontrado:", result);
                 alert("La extracción de texto con IA pudo haber fallado o el formato de respuesta es inesperado. Revise la consola.");
@@ -628,3 +632,75 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 });
+
+/**
+ * Sends text to the backend for classification and logs the result to the console.
+ * @param {string} textToClassify The text to be classified.
+ */
+async function classifyDocumentText(textToClassify) {
+    if (!textToClassify || textToClassify.trim() === "") {
+        console.error("classifyDocumentText: No text provided for classification.");
+        // Optionally, provide user feedback here (e.g., alert, update UI element)
+        return;
+    }
+
+    console.log("Sending text for classification:", textToClassify);
+
+    try {
+        const response = await fetch('/api/documentos/classify-document', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: textToClassify }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            console.log("✅ Document Classification Result:");
+            console.log("   Predicted Type:", result.prediction);
+            console.log("   Confidence:", result.confidence !== undefined ? result.confidence.toFixed(4) : 'N/A');
+            
+            if (result.all_probabilities && result.all_probabilities.length > 0) {
+                console.log("   Top Probabilities:");
+                result.all_probabilities.forEach((probItem, index) => {
+                    // probItem is expected to be an array like [document_type, probability]
+                    if (Array.isArray(probItem) && probItem.length === 2) {
+                         console.log(`     ${index + 1}. ${probItem[0]}: ${probItem[1].toFixed(4)}`);
+                    } else {
+                         console.log(`     ${index + 1}. ${probItem}`); // Fallback for unexpected format
+                    }
+                });
+            }
+            // Display raw result object for more details if needed
+            // console.log("Raw classification data:", result);
+
+        } else {
+            console.error("❌ Error in classification response:", result.error || `HTTP Error ${response.status}`);
+            if (result.details) {
+                console.error("   Details:", result.details);
+            }
+        }
+    } catch (error) {
+        console.error("❌ Exception during classification request:", error);
+        // This typically catches network errors or issues with the request itself
+    }
+}
+
+// HOW TO USE THIS FUNCTION:
+// This function needs to be called when the text from Gemini is available.
+// For example, if the text is placed in a textarea with id="geminiOutputText":
+//
+// const geminiTextArea = document.getElementById('geminiOutputText');
+// if (geminiTextArea) {
+//     const text = geminiTextArea.value;
+//     classifyDocumentText(text);
+// }
+//
+// Or, if it's part of an event or another function:
+//
+// function handleGeminiResponse(geminiText) {
+//     // ... other processing ...
+//     classifyDocumentText(geminiText);
+// }
