@@ -659,23 +659,40 @@ async function classifyDocumentText(textToClassify) {
 
         if (response.ok) {
             console.log("✅ Document Classification Result:");
+            console.log("✅ Document Classification Result:");
             console.log("   Predicted Type:", result.prediction);
             console.log("   Confidence:", result.confidence !== undefined ? result.confidence.toFixed(4) : 'N/A');
-            
-            if (result.all_probabilities && result.all_probabilities.length > 0) {
-                console.log("   Top Probabilities:");
-                result.all_probabilities.forEach((probItem, index) => {
-                    // probItem is expected to be an array like [document_type, probability]
-                    if (Array.isArray(probItem) && probItem.length === 2) {
-                         console.log(`     ${index + 1}. ${probItem[0]}: ${probItem[1].toFixed(4)}`);
-                    } else {
-                         console.log(`     ${index + 1}. ${probItem}`); // Fallback for unexpected format
-                    }
-                });
-            }
-            // Display raw result object for more details if needed
-            // console.log("Raw classification data:", result);
 
+            // New logic to auto-select the dropdown:
+            const predictedTypeName = result.prediction; // e.g., "PLANO DEL PREDIO"
+            const documentTypeDropdown = document.getElementById('document-type-select');
+
+            if (predictedTypeName && documentTypeDropdown) {
+                let foundAndSelected = false;
+                for (let i = 0; i < documentTypeDropdown.options.length; i++) {
+                    const option = documentTypeDropdown.options[i];
+                    // Compare option text content (what user sees) or a data attribute if more reliable
+                    // Assuming option.textContent is what matches the prediction string.
+                    // Normalize whitespace and case for a more robust match, if necessary.
+                    if (option.textContent.trim().toLowerCase() === predictedTypeName.trim().toLowerCase()) {
+                        documentTypeDropdown.value = option.value; // Set the value of the select element
+                        foundAndSelected = true;
+                        break;
+                    }
+                }
+
+                if (foundAndSelected) {
+                    console.log(`   Auto-selected "${predictedTypeName}" in the dropdown.`);
+                    // Dispatch a 'change' event to trigger any listeners (e.g., for dynamic fields)
+                    const changeEvent = new Event('change', { bubbles: true });
+                    documentTypeDropdown.dispatchEvent(changeEvent);
+                } else {
+                    console.warn(`   Predicted type "${predictedTypeName}" not found in the dropdown options.`);
+                }
+            } else {
+                if (!predictedTypeName) console.warn("   No prediction available to auto-select dropdown.");
+                if (!documentTypeDropdown) console.error("   Could not find 'document-type-select' dropdown element.");
+            }
         } else {
             console.error("❌ Error in classification response:", result.error || `HTTP Error ${response.status}`);
             if (result.details) {
