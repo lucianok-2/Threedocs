@@ -1,79 +1,87 @@
+// src/routes/auth.js
 const express = require('express');
 const router = express.Router();
 const { admin, db } = require('../firebase');
-const jwt = require('jsonwebtoken');
+const fetch = require('node-fetch');
 
+// Login → POST /auth
 router.post('/', async (req, res) => {
   const { email, password } = req.body;
+  if (!process.env.FIREBASE_API_KEY) {
+    console.error('FIREBASE_API_KEY not set');
+    return res.status(500).json({ message: 'Configuración de autenticación incompleta' });
+  }
 
   try {
-    const usuariosRef = db.collection('usuarios');
-    const querySnapshot = await usuariosRef
-      .where('email', '==', email.toLowerCase())
-      .limit(1)
-      .get();
+    // Llamada a Firebase Auth REST API
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`;
+    const firebaseRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const firebaseData = await firebaseRes.json();
 
-    if (querySnapshot.empty) {
-      return res.status(401).json({ message: 'Usuario no encontrado' });
+    if (!firebaseRes.ok) {
+      return res.status(401).json({ message: firebaseData.error?.message || 'Credenciales inválidas' });
     }
 
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data();
+    // Verificar que el token sea válido
+    await admin.auth().verifyIdToken(firebaseData.idToken);
 
-    if (!userData.activo) {
-      return res.status(403).json({ message: 'Usuario desactivado' });
-    }
-
-    if (userData.password !== password) {
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
-    }
-
-    const token = jwt.sign({
-      uid: userDoc.id,
-      email: userData.email,
-      rol: userData.rol
-    }, process.env.JWT_SECRET, { expiresIn: '2h' });
-
-    res.json({ token });
-
+    // Devolver el token con la propiedad 'token'
+    return res.json({ token: firebaseData.idToken });
   } catch (err) {
-    console.error("Error en autenticación:", err);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    console.error('Error en /auth:', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
 
-// Agregar esta nueva ruta para el registro
+// Registro → POST /auth/register
 router.post('/register', async (req, res) => {
-  const { email, password, role, active } = req.body;
-  
+  const { email, password, rol = 'usuario', activo = true } = req.body;
+
   try {
-    // Verificar si el usuario ya existe
-    const usuariosRef = db.collection('usuarios');
-    const snapshot = await usuariosRef.where('email', '==', email.toLowerCase()).get();
-    
-    if (!snapshot.empty) {
-      return res.status(400).json({ message: 'El correo electrónico ya está registrado' });
+    // Evitar doble registro
+    try {
+      await admin.auth().getUserByEmail(email);
+      return res.status(400).json({ message: 'El correo ya está registrado' });
+    } catch (e) {
+      if (e.code !== 'auth/user-not-found') throw e;
     }
-    
-    // Crear nuevo usuario
-    const nuevoUsuario = {
+
+    // Crear en Firebase Auth
+    const userRecord = await admin.auth().createUser({ email, password });
+    // Asignar custom claim de rol (opcional)
+    await admin.auth().setCustomUserClaims(userRecord.uid, { rol });
+
+    // Guardar metadata en Firestore
+    await db.collection('usuarios').doc(userRecord.uid).set({
       email: email.toLowerCase(),
-      password, // Considera usar hash para la contraseña en producción
-      rol: role,
-      activo: active,
+      rol,
+      activo,
       fechaRegistro: new Date().toISOString()
-    };
-    
-    const docRef = await usuariosRef.add(nuevoUsuario);
-    
-    res.status(201).json({ 
-      message: 'Usuario registrado correctamente',
-      uid: docRef.id 
     });
+
+    return res.status(201).json({ uid: userRecord.uid });
   } catch (error) {
-    console.error('Error al registrar usuario:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    console.error('Error en /auth/register:', error);
+    return res.status(500).json({ message: 'Error interno del servidor' });
   }
+});
+
+// GET route for forgot password page
+router.get('/forgot-password', (req, res) => {
+    try {
+        // Assuming 'forgot-password.handlebars' is in the 'views' folder
+        // and the main layout is configured elsewhere or not needed for this specific view.
+        // If you use a specific layout for auth pages (e.g., 'auth_layout.handlebars'),
+        // you can specify it like: res.render('forgot-password', { layout: 'auth_layout' });
+        res.render('forgot-password', { layout: 'auth' });
+    } catch (error) {
+        console.error("Error rendering forgot-password page:", error);
+        res.status(500).send("Error al cargar la página de olvido de contraseña.");
+    }
 });
 
 module.exports = router;
