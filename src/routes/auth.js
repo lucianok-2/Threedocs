@@ -70,4 +70,18 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// GET route for forgot password page
+router.get('/forgot-password', (req, res) => {
+    try {
+        // Assuming 'forgot-password.handlebars' is in the 'views' folder
+        // and the main layout is configured elsewhere or not needed for this specific view.
+        // If you use a specific layout for auth pages (e.g., 'auth_layout.handlebars'),
+        // you can specify it like: res.render('forgot-password', { layout: 'auth_layout' });
+        res.render('forgot-password', { layout: 'auth' });
+    } catch (error) {
+        console.error("Error rendering forgot-password page:", error);
+        res.status(500).send("Error al cargar la página de olvido de contraseña.");
+    }
+});
+
 module.exports = router;
