@@ -377,17 +377,128 @@ document.addEventListener('DOMContentLoaded', function () {
             
             if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0].text) {
                 const extractedTextFromGemini = result.candidates[0].content.parts[0].text;
-                console.log("Texto extraído por Gemini:", extractedTextFromGemini);
-                
-                // Call classifyDocumentText to route through Node.js backend
+                console.log("Texto extraído por Gemini (para auto-relleno):", extractedTextFromGemini);
+
+                // Call classifyDocumentText to identify document type and auto-select dropdown
+                // This function also logs to console and triggers 'change' on dropdown.
                 await classifyDocumentText(extractedTextFromGemini); 
-                // The classifyDocumentText function already logs results to the console.
-                // You can add an alert here if you want a popup in addition to console logs.
-                alert("Extracción de texto con IA y clasificación solicitada. Revise la consola para ver el resultado de la clasificación.");
+                alert("Extracción de texto con IA y clasificación solicitada. Revise la consola para ver el resultado de la clasificación. Auto-relleno de campos en proceso...");
+
+                // --- START: New logic for auto-filling dynamic fields ---
+                if (currentFieldsToCollect && currentFieldsToCollect.length > 0 && extractedTextFromGemini) {
+                    console.log("Campos a recolectar para auto-relleno:", currentFieldsToCollect);
+
+                    // Construct the prompt for the second Gemini call (information extraction)
+                    // Ensure field names are sent as a simple list/string for the prompt.
+                    const fieldNamesString = currentFieldsToCollect.join(', '); 
+                    const informationExtractionPrompt = `Dado el siguiente texto de un documento:
+---
+${extractedTextFromGemini}
+---
+Y dada la siguiente lista de nombres de campos que necesito extraer:
+${fieldNamesString}
+
+Por favor, extrae la información para cada campo del texto del documento y proporciónala como un objeto JSON. Las claves en el objeto JSON deben ser los nombres de los campos exactamente como se proporcionaron en la lista, y los valores deben ser la información extraída del texto. 
+Si no puedes encontrar la información para un campo específico, usa un string vacío ("") o null como valor para ese campo en el JSON.
+Asegúrate de que la respuesta sea únicamente el objeto JSON.`;
+
+                    console.log("Prompt para extracción de información específica:", informationExtractionPrompt);
+
+                    try {
+                        if (!window.geminiConfig || !window.geminiConfig.apiKey) {
+                            alert('La API Key de Gemini no está disponible para la extracción de campos. Verifique la configuración.');
+                            console.error('Gemini API Key missing for field extraction.');
+                            // Return or throw error to stop further execution in this block
+                            return; 
+                        }
+                        const apiKey = window.geminiConfig.apiKey;
+
+                        const extractionRequestBody = {
+                            contents: [{
+                                parts: [{ text: informationExtractionPrompt }]
+                            }],
+                            // Optional: Add generationConfig for better control over JSON output, if needed
+                            // generationConfig: {
+                            //   "response_mime_type": "application/json", // Request JSON output directly
+                            // }
+                        };
+                        
+                        // Note: As of some Gemini API versions, direct JSON output mode might require specific model versions (e.g., gemini-1.5-pro/flash with a beta flag)
+                        // If direct JSON output isn't working reliably, we'll parse it from the text part.
+                        // For now, we assume the text part will contain a valid JSON string.
+
+                        console.log("Enviando solicitud a Gemini para extracción de campos específicos...");
+                        const extractionResponse = await fetch(`${GEMINI_API_ENDPOINT}?key=${apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(extractionRequestBody)
+                        });
+
+                        if (!extractionResponse.ok) {
+                            const errorData = await extractionResponse.json();
+                            console.error('Error from Gemini API during field extraction:', errorData);
+                            throw new Error(`Error en la API de Gemini para extracción de campos: ${extractionResponse.statusText} - ${JSON.stringify(errorData)}`);
+                        }
+
+                        const extractionResult = await extractionResponse.json();
+                        console.log("Respuesta de Gemini para extracción de campos:", extractionResult);
+
+                        if (extractionResult.candidates && extractionResult.candidates[0].content && extractionResult.candidates[0].content.parts && extractionResult.candidates[0].content.parts[0].text) {
+                            const extractedFieldsText = extractionResult.candidates[0].content.parts[0].text;
+                            console.log("Texto de campos extraídos por Gemini:", extractedFieldsText);
+
+                            let fieldDataJson = null;
+                            try {
+                                // Attempt to parse the string as JSON. Gemini might return it wrapped in backticks or with "json" prefix.
+                                const cleanedJsonString = extractedFieldsText.replace(/^```json\s*|```$/g, '').trim();
+                                fieldDataJson = JSON.parse(cleanedJsonString);
+                            } catch (parseError) {
+                                console.error("Error al parsear JSON de campos extraídos:", parseError, "Texto recibido:", extractedFieldsText);
+                                alert("Se recibió información de los campos, pero no se pudo procesar (error de formato JSON). Revise la consola.");
+                            }
+
+                            if (fieldDataJson) {
+                                console.log("JSON de campos extraídos parseado:", fieldDataJson);
+                                currentFieldsToCollect.forEach(fieldName => {
+                                    const inputId = `dynamic-field-${fieldName.replace(/\s+/g, '-').toLowerCase()}`;
+                                    const inputElement = document.getElementById(inputId);
+                                    if (inputElement) {
+                                        const extractedValue = fieldDataJson[fieldName];
+                                        if (extractedValue !== undefined && extractedValue !== null) {
+                                            inputElement.value = extractedValue;
+                                            console.log(`Campo "${fieldName}" (ID: ${inputId}) auto-completado con valor: "${extractedValue}"`);
+                                        } else {
+                                            console.log(`No se encontró valor para el campo "${fieldName}" en la respuesta de Gemini, o el valor era nulo/indefinido.`);
+                                        }
+                                    } else {
+                                        console.warn(`No se encontró el elemento de input con ID "${inputId}" para el campo "${fieldName}".`);
+                                    }
+                                });
+                                alert("Campos del formulario han sido auto-completados con la información extraída.");
+                            }
+                        } else {
+                            console.warn("Respuesta inesperada de Gemini para extracción de campos o datos no encontrados.");
+                            alert("No se pudo extraer información específica para los campos del formulario desde el texto del documento.");
+                        }
+
+                    } catch (extractionError) {
+                        console.error('Error durante la extracción de campos específicos con Gemini:', extractionError);
+                        alert(`Ocurrió un error durante el auto-completado de campos: ${extractionError.message}. Por favor, revise la consola.`);
+                    }
+                } else {
+                    if (!extractedTextFromGemini) {
+                        console.log("No hay texto extraído disponible para el auto-relleno de campos.");
+                    } else if (!currentFieldsToCollect || currentFieldsToCollect.length === 0) {
+                        console.log("No hay campos específicos definidos para este tipo de documento ('currentFieldsToCollect' está vacío o no definido). No se intentará auto-relleno.");
+                        // Optionally inform the user if no fields are defined for auto-fill for this doc type
+                        // alert("Este tipo de documento no tiene campos predefinidos para auto-completar.");
+                    }
+                }
+                // --- END: New logic for auto-filling dynamic fields ---
 
             } else {
-                console.log("Respuesta inesperada de Gemini o texto no encontrado:", result);
-                alert("La extracción de texto con IA pudo haber fallado o el formato de respuesta es inesperado. Revise la consola.");
+                console.log("Respuesta inesperada de Gemini (primera llamada) o texto no encontrado:", result);
+                alert("La extracción de texto inicial con IA pudo haber fallado o el formato de respuesta es inesperado. Revise la consola.");
             }
 
         } catch (error) {
@@ -705,19 +816,4 @@ async function classifyDocumentText(textToClassify) {
     }
 }
 
-// HOW TO USE THIS FUNCTION:
-// This function needs to be called when the text from Gemini is available.
-// For example, if the text is placed in a textarea with id="geminiOutputText":
-//
-// const geminiTextArea = document.getElementById('geminiOutputText');
-// if (geminiTextArea) {
-//     const text = geminiTextArea.value;
-//     classifyDocumentText(text);
-// }
-//
-// Or, if it's part of an event or another function:
-//
-// function handleGeminiResponse(geminiText) {
-//     // ... other processing ...
-//     classifyDocumentText(geminiText);
-// }
+
