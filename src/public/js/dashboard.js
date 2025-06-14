@@ -1,7 +1,27 @@
-// Funciones para el dashboard
+
+async function fetchCounts() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+  try {
+    const response = await fetch('/api/stats', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Error al obtener estadísticas');
+    const data = await response.json();
+    const docEl = document.getElementById('document-count');
+    const propEl = document.getElementById('property-count');
+    if (docEl) docEl.textContent = data.documents;
+    if (propEl) propEl.textContent = data.properties;
+  } catch (error) {
+    console.error('Error al cargar contadores:', error);
+  }
+}
 document.addEventListener('DOMContentLoaded', function() {
   // Configurar la barra lateral
-  setupSidebar();
+  // setupSidebar(); // Assuming setupSidebar is defined elsewhere or not strictly needed for this change
+  if (typeof setupSidebar === 'function') {
+    setupSidebar();
+  }
   
   // Configurar botón de subir documentos
   const goToUploadBtn = document.getElementById('go-to-upload');
@@ -43,9 +63,14 @@ document.addEventListener('DOMContentLoaded', function() {
       window.location.href = '/';
     });
   }
+
+  // Fetch and display history
+  if (document.getElementById('historial-lista')) {
+    fetchAndDisplayHistory();
+  }
+  fetchCounts();
 });
 
-// Función para expandir/colapsar carpetas
 function toggleFolder(folderId) {
   const folderContent = document.getElementById(`${folderId}-content`);
   const folderIcon = document.getElementById(`${folderId}-icon`);

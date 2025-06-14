@@ -6,52 +6,11 @@ const jwt = require('jsonwebtoken');
 const { admin, db , storage} = require('./firebase');
 const cookieParser = require('cookie-parser'); 
 const multer = require('multer');
-const fs = require('fs');
-const crypto = require('crypto');
+
 const cors = require('cors');
 require('dotenv').config();
 const app = express();
 
-
-
-// Configurar multer para almacenar archivos temporalmente
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: function (req, file, cb) {
-      const tempDir = path.join(__dirname, 'temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-      cb(null, tempDir);
-    },
-    filename: function (req, file, cb) {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-  }),
-  limits: {
-    fileSize: 10 * 1024 * 1024 // Límite de 10MB
-  },
-  fileFilter: function (req, file, cb) {
-    // Permitir PDF, JPG, JPEG y otros formatos comunes
-    const allowedMimes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
-    
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Tipo de archivo no permitido. Solo se permiten PDF, imágenes y documentos de Office.'));
-    }
-  }
-});
 
 // Handlebars (debe ir antes de usar res.render)
 app.engine('handlebars', engine({
@@ -88,45 +47,60 @@ app.use('/api/predios', propertiesRoutes);
 const documentsRoutes = require('./routes/documents.js');
 app.use('/api/documentos', documentsRoutes);
 
+// Importar y usar las rutas de admin
+const adminRoutes = require('./routes/admin.js');
+console.log('Attempting to mount /api/admin routes from admin.js');
+app.use('/api/admin', adminRoutes);
+// Importar y usar las rutas de estadísticas
+
 // Middleware para verificar token
-function verificarToken(req, res, next) {
-  // Obtener token del header Authorization, query params o cookies
+async function verificarToken(req, res, next) {
+  // 1) Extrae el token de Authorization, cookie o query
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1] || 
-                req.query.token || 
-                req.cookies.token;
-  
-  console.log('Token recibido:', token);
-  console.log('Query params:', req.query);
-  console.log('Cookies:', req.cookies);
-  
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : req.cookies.token || req.query.token;
+
   if (!token) {
-      console.log('No se proporcionó token');
-      return res.redirect('/');
+    console.log('No se proporcionó token');
+    return res.redirect('/');
   }
-  
+
   try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.usuario = decoded;
-      next();
-  } catch (error) {
-      console.error('Error al verificar token:', error);
-      return res.redirect('/');
+    // 2) Verifica el ID Token con Firebase Admin SDK
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.usuario = decoded;    // contiene uid, email, customClaims, etc.
+    return next();
+  } catch (err) {
+    console.error('Error al verificar token con Firebase:', err);
+    return res.redirect('/');
   }
 }
 
 // Firebase config público para frontend
-app.get('/firebase-config.js', (req, res) => {
-  const config = {
-    apiKey: process.env.FIREBASE_API_KEY,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET // Nueva propiedad para Storage
-  };
-  res.type('application/javascript');
-  res.send(`window.firebaseConfig = ${JSON.stringify(config)}`);
-});
+const firebaseConfig = {
+  apiKey: "AIzaSyDmpM57gngAuzXPKfyrtXeZ4izhqCDIzMA",
+  authDomain: "threedocs-4b9cc.firebaseapp.com",
+  databaseURL: "https://threedocs-4b9cc-default-rtdb.firebaseio.com",
+  projectId: "threedocs-4b9cc",
+  storageBucket: "gs://threedocs-4b9cc.firebasestorage.app",
+  messagingSenderId: "307923650702",
+  appId: "1:307923650702:web:488b36ec583152711ae1df"
+};
 
+app.use('/firebase-config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.firebaseConfig = ${JSON.stringify(firebaseConfig)}`);
+});
+const geminiConfig = { 
+  apiKey: process.env.GEMINI_API_KEY,
+  prompt: "Eres un asistente experto en OCR de documentos PDF. Tu tarea principal es extraer todo el texto del siguiente documento de la manera más precisa y completa posible. Durante el proceso de extracción, realiza una limpieza exhaustiva del texto para eliminar cualquier carácter, símbolo o formato que no sea parte del contenido textual relevante (por ejemplo, ruido de escaneo, artefactos de conversión). El objetivo es obtener un bloque de texto limpio y legible, donde los saltos de párrafo y las líneas nuevas se representen como tales. Formatea tu respuesta final como un objeto JSON que contenga una única clave 'texto_completo_limpio' y cuyo valor sea el texto extraído y depurado del documento, con los saltos de línea preservados como caracteres de nueva línea reales dentro del string." 
+};
+app.use('/gemini-config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.geminiConfig = ${JSON.stringify(geminiConfig)}`);
+});
+// Rutas de autenticación con layout de autenticación
 
 app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
 app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
@@ -136,7 +110,7 @@ app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { us
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;
-    res.render('upload', { usuario: req.usuario, propertyId: propertyId });
+    res.render('upload', { usuario: req.usuario, propertyId: propertyId, firebaseConfig: firebaseConfig });
 });
 app.get('/properties', verificarToken, (req, res) => res.render('properties', { usuario: req.usuario }));
 
@@ -148,5 +122,7 @@ app.get('/logout', (req, res) => {
    res.clearCookie('token'); // borra la cookie token
    res.redirect('/');        // redirige al login o inicio
 });
+
+
 
 module.exports = app;

@@ -38,6 +38,18 @@ window.modalHelpers = {
     if (modal) {
       document.getElementById('modal-title').textContent = `Subir Documento: ${typeName}`;
       document.getElementById('document-type-id').value = typeId;
+      // Store the document type name in a new hidden input or update if exists
+      let typeNameElement = document.getElementById('document-type-name');
+      if (!typeNameElement) {
+        
+        console.error('Hidden input with ID "document-type-name" not found. Please add it to the upload modal HTML.');
+        
+      }
+      
+      if (document.getElementById('document-type-name')) {
+          document.getElementById('document-type-name').value = typeName;
+      } // else, it's handled by the console error above.
+      
       document.getElementById('property-id').value = propertyId;
       
       // Limpiar el formulario
@@ -112,4 +124,75 @@ document.addEventListener('click', function(event) {
       modal.classList.remove('flex');
     }
   });
+});
+
+// Modal para carga masiva
+window.modalHelpers.showBulkUploadModal = function() {
+  const modal = document.getElementById('bulk-upload-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+};
+
+window.modalHelpers.closeBulkUploadModal = function() {
+  const modal = document.getElementById('bulk-upload-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+
+    // Limpiar el input de archivos
+    const bulkFileInput = document.getElementById('bulk-file-input');
+    if (bulkFileInput) {
+      bulkFileInput.value = ''; // Clear the selected file
+    }
+
+    // Limpiar y ocultar el feedback
+    const bulkUploadFeedback = document.getElementById('bulk-upload-feedback');
+    if (bulkUploadFeedback) {
+      bulkUploadFeedback.classList.add('hidden');
+      bulkUploadFeedback.textContent = '';
+    }
+
+    // Re-habilitar el botón de procesar
+    const processBulkFilesButton = document.getElementById('process-bulk-files-button');
+    if (processBulkFilesButton) {
+      processBulkFilesButton.disabled = false;
+    }
+  }
+};
+
+// Agregar los event listeners para el modal de carga masiva
+document.addEventListener('DOMContentLoaded', function() {
+  const bulkUploadButton = document.getElementById('bulk-upload-button');
+  const closeBulkUploadModal = document.getElementById('close-bulk-upload-modal');
+  const cancelBulkUpload = document.getElementById('cancel-bulk-upload');
+
+  if (bulkUploadButton) {
+    bulkUploadButton.addEventListener('click', function() {
+      window.modalHelpers.showBulkUploadModal();
+    });
+  }
+
+  if (closeBulkUploadModal) {
+    closeBulkUploadModal.addEventListener('click', function() {
+      window.modalHelpers.closeBulkUploadModal();
+    });
+  }
+
+  if (cancelBulkUpload) {
+    cancelBulkUpload.addEventListener('click', function() {
+      window.modalHelpers.closeBulkUploadModal();
+    });
+  }
+
+  // Cerrar modal al hacer clic fuera
+  const bulkUploadModal = document.getElementById('bulk-upload-modal');
+  if (bulkUploadModal) {
+    bulkUploadModal.addEventListener('click', function(event) {
+      if (event.target === this) {
+        window.modalHelpers.closeBulkUploadModal();
+      }
+    });
+  }
 });
