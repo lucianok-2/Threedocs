@@ -1,12 +1,10 @@
-// src/routes/properties.js
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../firebase');
-const { addHistoryEntry } = require('./history.js');
+const { db, admin } = require('../firebase'); // Assuming firebase.js exports db and admin
+const { addHistoryEntry } = require('./history.js'); // Assuming this is correctly imported
 
 // Middleware para verificar el Firebase ID Token
 async function verificarToken(req, res, next) {
-  // 1) Extrae el token de Authorization, cookie o query
   const authHeader = req.headers['authorization'];
   const token = authHeader?.startsWith('Bearer ')
     ? authHeader.split(' ')[1]
@@ -14,21 +12,83 @@ async function verificarToken(req, res, next) {
 
   if (!token) {
     console.log('No se proporcionó token');
-    return res.redirect('/');
+    // Requirement 10: Return JSON error for 401
+    return res.status(401).json({ error: 'Authentication token not provided.' });
   }
 
   try {
-    // 2) Verifica el ID Token con Firebase Admin SDK
-    const decoded = await admin.auth().verifyIdToken(token);
-    req.usuario = decoded;    // contiene uid, email, customClaims, etc.
-    return next();
-  } catch (err) {
-    console.error('Error al verificar token con Firebase:', err);
-    return res.redirect('/');
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.usuario = decodedToken; // Attach user info to request
+    next();
+  } catch (error) {
+    console.error('Error al verificar token con Firebase:', error);
+    // Requirement 10: Return JSON error for 403
+    return res.status(403).json({ error: 'Invalid or expired authentication token.' });
   }
 }
 
-// GET /api/predios — Listar todos los predios del usuario
+// GET /api/properties/stats — Obtener estadísticas de predios y documentos
+router.get('/stats', verificarToken, async (req, res) => {
+  try {
+    const userId = req.usuario.uid;
+    const AVERAGE_DOCS_PER_PROPERTY = 5; // Requirement 5
+
+    // Requirement 3: Query predios collection for the authenticated user
+    const prediosQuerySnapshot = await db.collection('predios')
+      .where('id_user', '==', userId)
+      .get();
+
+    let prediosRegistrados = 0;
+    let prediosActivos = 0;
+
+    if (!prediosQuerySnapshot.empty) {
+      prediosRegistrados = prediosQuerySnapshot.size; // Count total properties
+      prediosQuerySnapshot.forEach(doc => {
+        if (doc.data().activo === true) { // Count active properties
+          prediosActivos++;
+        }
+      });
+    }
+
+    // Requirement 4: Query documentos collection for the authenticated user
+    // Assuming documents have an id_user field.
+    const documentosQuerySnapshot = await db.collection('documentos')
+      .where('id_user', '==', userId)
+      .get();
+    
+    const documentosSubidos = documentosQuerySnapshot.empty ? 0 : documentosQuerySnapshot.size; // Count total documents
+
+    // Requirement 5: Calculate cumplimientoDocumental
+    let cumplimientoDocumental = 0;
+    if (prediosRegistrados === 0) {
+        cumplimientoDocumental = 0; // Or 100 if no properties implies full compliance by default
+    } else if (documentosSubidos === 0) {
+        cumplimientoDocumental = 0;
+    } else {
+        const totalExpectedDocuments = prediosRegistrados * AVERAGE_DOCS_PER_PROPERTY;
+        if (totalExpectedDocuments > 0) {
+            cumplimientoDocumental = Math.min(100, Math.round((documentosSubidos / totalExpectedDocuments) * 100));
+        } else {
+            // This case (totalExpectedDocuments <= 0 while prediosRegistrados > 0) should ideally not happen with AVERAGE_DOCS_PER_PROPERTY > 0
+            cumplimientoDocumental = 0; 
+        }
+    }
+
+    // Requirement 6: Return JSON
+    res.json({
+      prediosRegistrados,
+      prediosActivos,
+      documentosSubidos,
+      cumplimientoDocumental
+    });
+
+  } catch (error) { // Requirement 7: Error handling
+    console.error('Error al obtener estadísticas de predios y documentos:', error);
+    res.status(500).json({ error: 'Error interno al obtener estadísticas' });
+  }
+});
+
+// GET /api/properties — Listar todos los predios del usuario
 router.get('/', verificarToken, async (req, res) => {
   try {
     const snapshot = await db
@@ -44,7 +104,7 @@ router.get('/', verificarToken, async (req, res) => {
   }
 });
 
-// GET /api/predios/:id — Obtener un predio específico
+// GET /api/properties/:id — Obtener un predio específico
 router.get('/:id', verificarToken, async (req, res) => {
   try {
     const docRef = db.collection('predios').doc(req.params.id);
@@ -63,7 +123,7 @@ router.get('/:id', verificarToken, async (req, res) => {
   }
 });
 
-// POST /api/predios — Crear un nuevo predio
+// POST /api/properties — Crear un nuevo predio
 router.post('/', verificarToken, async (req, res) => {
   try {
     const {
@@ -78,7 +138,8 @@ router.post('/', verificarToken, async (req, res) => {
       nombrePropietario,
       intermediario,
       certificaciones = [],
-      propietario
+      propietario,
+      activo // Requirement 8: consume activo field
     } = req.body;
 
     if (!idPredio || !nombre) {
@@ -99,21 +160,20 @@ router.post('/', verificarToken, async (req, res) => {
       certificaciones,
       propietario: propietario || null,
       fechaCreacion: new Date(),
-      id_user: req.usuario.uid
+      id_user: req.usuario.uid,
+      // Requirement 8: default activo to false if not provided or not a boolean
+      activo: typeof activo === 'boolean' ? activo : false 
     };
 
     const docRef = await db.collection('predios').add(predioData);
-
-    // Historial (opcional)
 
     await addHistoryEntry({
       userId: req.usuario.uid,
       actionType: 'CREATE_PROPERTY',
       entityType: 'property',
       entityId: docRef.id,
-      details: { propertyName: nombre, idPredio }
+      details: { propertyName: nombre, idPredio, activo: predioData.activo }
     });
-
 
     res.status(201).json({ _id: docRef.id, ...predioData });
   } catch (error) {
@@ -122,7 +182,7 @@ router.post('/', verificarToken, async (req, res) => {
   }
 });
 
-// PUT /api/predios/:id — Actualizar un predio existente
+// PUT /api/properties/:id — Actualizar un predio existente
 router.put('/:id', verificarToken, async (req, res) => {
   try {
     const docRef = db.collection('predios').doc(req.params.id);
@@ -130,41 +190,63 @@ router.put('/:id', verificarToken, async (req, res) => {
     if (!docSnap.exists) {
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
-    const current = docSnap.data();
-    if (current.id_user !== req.usuario.uid) {
+    const currentData = docSnap.data();
+    if (currentData.id_user !== req.usuario.uid) {
       return res.status(403).json({ error: 'Sin permiso para modificar este predio' });
     }
 
     const updates = { fechaActualizacion: new Date() };
-    // Sólo actualiza los campos presentes en el body
-    ['idPredio','nombre','rol','superficie','descripcion','ubicacion','modeloCompra','rutPropietario','nombrePropietario','intermediario','certificaciones','propietario']
-      .forEach(field => {
-        if (req.body[field] !== undefined) {
-          updates[field] = req.body[field];
+    const allowedFields = [
+      'idPredio','nombre','rol','superficie','descripcion','ubicacion',
+      'modeloCompra','rutPropietario','nombrePropietario','intermediario',
+      'certificaciones','propietario', 'activo' // Requirement 9: include activo
+    ];
+    
+    let changed = false;
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        if (field === 'activo') {
+          // Requirement 9: ensure 'activo' is a boolean before updating
+          if (typeof req.body[field] === 'boolean') {
+            if (currentData.activo !== req.body[field]) {
+              updates[field] = req.body[field];
+              changed = true;
+            }
+          } 
+          // If req.body.activo is present but not a boolean, it's ignored, 
+          // and currentData.activo (the existing value) is preserved.
+        } else {
+          if (currentData[field] !== req.body[field]) {
+            updates[field] = req.body[field];
+            changed = true;
+          }
         }
-      });
-
-    await docRef.update(updates);
-
-    //Historial (opcional)
-
-    await addHistoryEntry({
-      userId: req.usuario.uid,
-      actionType: 'UPDATE_PROPERTY',
-      entityType: 'property',
-      entityId: req.params.id,
-      details: { updatedFields: Object.keys(updates) }
+      }
     });
 
+    if (changed) {
+        await docRef.update(updates);
+        await addHistoryEntry({
+            userId: req.usuario.uid,
+            actionType: 'UPDATE_PROPERTY',
+            entityType: 'property',
+            entityId: req.params.id,
+            details: { updatedFields: Object.keys(updates).filter(k => k !== 'fechaActualizacion') }
+        });
+        // Return the updated document state by merging currentData with updates
+        res.json({ _id: req.params.id, ...currentData, ...updates });
+    } else {
+        // If only non-boolean 'activo' was provided, or no valid fields changed
+        res.json({ _id: req.params.id, ...currentData, message: "No valid changes detected or provided." });
+    }
 
-    res.json({ _id: req.params.id, ...current, ...updates });
   } catch (error) {
     console.error('Error al actualizar predio:', error);
     res.status(500).json({ error: 'Error al actualizar predio' });
   }
 });
 
-// DELETE /api/predios/:id — Eliminar un predio
+// DELETE /api/properties/:id — Eliminar un predio
 router.delete('/:id', verificarToken, async (req, res) => {
   try {
     const docRef = db.collection('predios').doc(req.params.id);
@@ -179,15 +261,13 @@ router.delete('/:id', verificarToken, async (req, res) => {
 
     await docRef.delete();
 
-    // Historial (opcional)
-
     await addHistoryEntry({
       userId: req.usuario.uid,
       actionType: 'DELETE_PROPERTY',
       entityType: 'property',
-      entityId: req.params.id
+      entityId: req.params.id,
+      details: { propertyName: data.nombre || data.idPredio } 
     });
-
 
     res.json({ _id: req.params.id, deleted: true });
   } catch (error) {
@@ -196,16 +276,16 @@ router.delete('/:id', verificarToken, async (req, res) => {
   }
 });
 
-// GET /api/predios/:id/documentos — Obtener documentos de un predio
+// GET /api/properties/:id/documentos — Obtener documentos de un predio
 router.get('/:id/documentos', verificarToken, async (req, res) => {
   try {
     const predioSnap = await db.collection('predios').doc(req.params.id).get();
     if (!predioSnap.exists) {
       return res.status(404).json({ error: 'Predio no encontrado' });
     }
-    const predio = predioSnap.data();
-    if (predio.id_user !== req.usuario.uid) {
-      return res.status(403).json({ error: 'Sin permiso para acceder a documentos' });
+    const predioData = predioSnap.data();
+    if (predioData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'Sin permiso para acceder a documentos de este predio' });
     }
 
     const docsSnap = await db

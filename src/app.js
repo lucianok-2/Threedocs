@@ -2,7 +2,6 @@ const express = require('express');
 const { engine } = require('express-handlebars');
 const morgan = require('morgan');
 const path = require('path');
-const jwt = require('jsonwebtoken');
 const { admin, db , storage} = require('./firebase');
 const cookieParser = require('cookie-parser'); 
 const multer = require('multer');
