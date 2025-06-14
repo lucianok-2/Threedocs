@@ -1,4 +1,3 @@
-
 async function fetchCounts() {
   const token = localStorage.getItem('token');
   if (!token) return;
@@ -16,70 +15,70 @@ async function fetchCounts() {
     console.error('Error al cargar contadores:', error);
   }
 }
-document.addEventListener('DOMContentLoaded', function() {
-  // Configurar la barra lateral
-  // setupSidebar(); // Assuming setupSidebar is defined elsewhere or not strictly needed for this change
-  if (typeof setupSidebar === 'function') {
-    setupSidebar();
-  }
-  
-  // Configurar botón de subir documentos
-  const goToUploadBtn = document.getElementById('go-to-upload');
-  if (goToUploadBtn) {
-    goToUploadBtn.addEventListener('click', function() {
-      const token = localStorage.getItem('token');
-      if (token) {
-        window.location.href = `/upload`;
-      } else {
-        alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-        window.location.href = '/';
-      }
-    });
-  }
-  
-  // Configurar enlace de subir documentos en la barra lateral
-  const uploadLink = document.getElementById('upload-link');
-  if (uploadLink) {
-    uploadLink.addEventListener('click', function() {
-      const token = localStorage.getItem('token');
-      if (token) {
-        window.location.href = `/upload`;
-      } else {
-        alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-        window.location.href = '/';
-      }
-    });
-  }
-  
-  // Configurar botón de cerrar sesión
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      // Eliminar token
-      localStorage.removeItem('token');
-      sessionStorage.removeItem('token');
-      // Redireccionar al login
-      window.location.href = '/';
-    });
-  }
-
-  // Fetch and display history
+document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('historial-lista')) {
     fetchAndDisplayHistory();
   }
   fetchCounts();
 });
 
-function toggleFolder(folderId) {
-  const folderContent = document.getElementById(`${folderId}-content`);
-  const folderIcon = document.getElementById(`${folderId}-icon`);
-  
-  if (folderContent.classList.contains('hidden')) {
-    folderContent.classList.remove('hidden');
-    folderIcon.setAttribute('d', 'M19 9l-7 7-7-7');
-  } else {
-    folderContent.classList.add('hidden');
-    folderIcon.setAttribute('d', 'M9 5l7 7-7 7');
+
+
+async function fetchAndDisplayHistory() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  try {
+    const response = await fetch('/api/historial?limit=10', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Error al obtener historial');
+    const history = await response.json();
+    const list = document.getElementById('historial-lista');
+    if (!list) return;
+    const loading = document.getElementById('historial-loading');
+    if (loading) loading.remove();
+    list.innerHTML = '';
+    if (history.length === 0) {
+      list.innerHTML = '<li class="text-sm text-gray-500">Sin actividad reciente</li>';
+      return;
+    }
+
+    const ICON_MAP = {
+      CREATE_PROPERTY: { icon: 'fa-user-plus', bg: 'bg-purple-100 text-purple-600' },
+      UPDATE_PROPERTY: { icon: 'fa-user-edit', bg: 'bg-blue-100 text-blue-600' },
+      DELETE_PROPERTY: { icon: 'fa-trash', bg: 'bg-red-100 text-red-600' },
+      UPLOAD_DOCUMENT: { icon: 'fa-file-upload', bg: 'bg-green-100 text-green-600' },
+      DELETE_DOCUMENT: { icon: 'fa-file-alt', bg: 'bg-red-100 text-red-600' },
+      DEFAULT: { icon: 'fa-history', bg: 'bg-gray-100 text-gray-600' }
+    };
+
+    history.forEach(entry => {
+      const info = ICON_MAP[entry.actionType] || ICON_MAP.DEFAULT;
+      const li = document.createElement('li');
+      li.className = 'flex items-start';
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = `flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${info.bg}`;
+      iconWrap.innerHTML = `<i class="fas ${info.icon}"></i>`;
+
+      const content = document.createElement('div');
+      content.className = 'ml-4';
+      const ts = entry.timestamp && entry.timestamp._seconds
+        ? new Date(entry.timestamp._seconds * 1000)
+        : null;
+      const dateStr = ts ? ts.toLocaleString() : '';
+      content.innerHTML = `<p class="text-sm font-medium text-gray-900">${entry.actionType}</p><p class="text-sm text-gray-500">${dateStr}</p>`;
+
+      li.appendChild(iconWrap);
+      li.appendChild(content);
+      list.appendChild(li);
+    });
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    const list = document.getElementById('historial-lista');
+    if (list) {
+      list.innerHTML = '<li class="mb-2 text-sm text-red-600">Error al cargar historial</li>';
+    }
   }
 }

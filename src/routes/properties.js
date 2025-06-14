@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../firebase');
-// const { addHistoryEntry } = require('../services/history'); // Descomenta si usas historial
+const { addHistoryEntry } = require('./history.js');
 
 // Middleware para verificar el Firebase ID Token
 async function verificarToken(req, res, next) {
@@ -105,7 +105,7 @@ router.post('/', verificarToken, async (req, res) => {
     const docRef = await db.collection('predios').add(predioData);
 
     // Historial (opcional)
-/*
+
     await addHistoryEntry({
       userId: req.usuario.uid,
       actionType: 'CREATE_PROPERTY',
@@ -113,7 +113,7 @@ router.post('/', verificarToken, async (req, res) => {
       entityId: docRef.id,
       details: { propertyName: nombre, idPredio }
     });
-*/
+
 
     res.status(201).json({ _id: docRef.id, ...predioData });
   } catch (error) {
@@ -146,8 +146,8 @@ router.put('/:id', verificarToken, async (req, res) => {
 
     await docRef.update(updates);
 
-    // Historial (opcional)
-/*
+    //Historial (opcional)
+
     await addHistoryEntry({
       userId: req.usuario.uid,
       actionType: 'UPDATE_PROPERTY',
@@ -155,7 +155,7 @@ router.put('/:id', verificarToken, async (req, res) => {
       entityId: req.params.id,
       details: { updatedFields: Object.keys(updates) }
     });
-*/
+
 
     res.json({ _id: req.params.id, ...current, ...updates });
   } catch (error) {
@@ -180,14 +180,14 @@ router.delete('/:id', verificarToken, async (req, res) => {
     await docRef.delete();
 
     // Historial (opcional)
-/*
+
     await addHistoryEntry({
       userId: req.usuario.uid,
       actionType: 'DELETE_PROPERTY',
       entityType: 'property',
       entityId: req.params.id
     });
-*/
+
 
     res.json({ _id: req.params.id, deleted: true });
   } catch (error) {

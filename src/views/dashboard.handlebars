@@ -153,21 +153,21 @@
         </table>
       </div>
     </div>
-    
-    <!-- Actividad reciente -->
-    <div class="bg-white rounded-lg shadow-md">
-      <div class="border-b px-6 py-4">
-        <h3 class="text-lg font-semibold text-gray-800">Actividad Reciente</h3>
-      </div>
-      <div class="p-6">
-        <div class="flow-root">
-          <ul id="historial-lista" class="-mb-8">
-            <li id="historial-loading">Cargando historial...</li>
-            
-          </ul>
+    <!-- Historial y progreso -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold text-gray-800">Historial de Cambios</h2>
+          <a href="#" class="text-sm text-blue-500 hover:underline">Ver todo</a>
         </div>
+        <ul id="historial-lista" class="space-y-4">
+          <li id="historial-loading" class="text-sm text-gray-500">Cargando historial...</li>
+        </ul>
       </div>
-    </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Progreso Documental por Predio</h2>
+        <p class="text-sm text-gray-500" id="progress-placeholder">Próximamente...</p>
   </div>
 </div>
 

@@ -28,7 +28,7 @@ app.engine('handlebars', engine({
 app.set('view engine', 'handlebars');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middlewares
+
 app.use(morgan('dev'));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -47,6 +47,9 @@ app.use('/api/predios', propertiesRoutes);
 const documentsRoutes = require('./routes/documents.js');
 app.use('/api/documentos', documentsRoutes);
 
+// Rutas de historial
+const historyRoutes = require('./routes/history.js');
+app.use('/api/historial', historyRoutes);
 // Importar y usar las rutas de admin
 const adminRoutes = require('./routes/admin.js');
 console.log('Attempting to mount /api/admin routes from admin.js');

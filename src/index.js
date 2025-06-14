@@ -9,11 +9,13 @@ const port = process.env.PORT || 3001;
 const authRoutes = require('./routes/auth');
 const propertiesRoutes = require('./routes/properties');
 const documentsRoutes = require('./routes/documents');
+const historyRoutes = require('./routes/history');
 
 // Configurar rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/predios', propertiesRoutes);
 app.use('/api/documentos', documentsRoutes);
+app.use('/api/historial', historyRoutes);
 
 // Iniciar el servidor con manejo de errores
 app.listen(port, () => {
