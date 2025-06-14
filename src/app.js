@@ -40,7 +40,7 @@ app.use('/auth', authRoutes);
 
 // Importar y usar las rutas de predios
 const propertiesRoutes = require('./routes/properties.js');
-app.use('/api/predios', propertiesRoutes);
+app.use('/api/properties', propertiesRoutes);
 
 // Importar y usar las rutas de documentos
 const documentsRoutes = require('./routes/documents.js');
@@ -48,7 +48,7 @@ app.use('/api/documentos', documentsRoutes);
 
 // Rutas de historial
 const historyRoutes = require('./routes/history.js');
-app.use('/api/historial', historyRoutes);
+app.use('/api/history', historyRoutes);
 // Importar y usar las rutas de admin
 const adminRoutes = require('./routes/admin.js');
 console.log('Attempting to mount /api/admin routes from admin.js');

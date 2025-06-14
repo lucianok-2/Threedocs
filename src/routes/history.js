@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { admin } = require('../firebase');
-const { getUserHistory } = require('../public/js/history');
+const { getUserHistory } = require('../public/js/history.js');
 
 async function verificarToken(req, res, next) {
   const authHeader = req.headers['authorization'];
