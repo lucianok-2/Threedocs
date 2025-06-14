@@ -1,4 +1,15 @@
-// src/public/js/dashboard.js
+function showDashboardModal() {
+  const modal = document.getElementById("dashboard-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+}
+
+function hideDashboardModal() {
+  const modal = document.getElementById("dashboard-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
 
 async function fetchAndDisplayHistory() {
   const token = localStorage.getItem('token');
@@ -216,17 +227,22 @@ async function fetchDocumentProgress() {
   }
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
-  fetchDashboardStats();
+  showDashboardModal();
+
+  const promises = [fetchDashboardStats()];
 
   if (document.getElementById('historial-lista')) {
-    fetchAndDisplayHistory();
+    promises.push(fetchAndDisplayHistory());
   }
 
   if (document.getElementById('progreso-documental-lista')) {
-    fetchDocumentProgress();
+    promises.push(fetchDocumentProgress());
   }
+
+  Promise.all(promises).then(() => {
+    hideDashboardModal();
+  });
   
   // Note: The 'go-to-upload' button from the old dashboard.handlebars was not in the new HTML.
   // If a similar button with this ID is added to the new dashboard, this code will handle it.
