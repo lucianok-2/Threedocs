@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../firebase'); // Assuming firebase.js exports db and admin
-const { addHistoryEntry } = require('./history.js'); // Assuming this is correctly imported
+const { addHistoryEntry } = require('../public/js/history');// Assuming this is correctly imported
 
 // Middleware para verificar el Firebase ID Token
 async function verificarToken(req, res, next) {

@@ -106,7 +106,7 @@ async function fetchDashboardStats() {
   }
 
   try {
-    const response = await fetch('/api/properties/stats', {
+    const response = await fetch('/api/predios/stats', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
@@ -157,13 +157,65 @@ async function fetchDashboardStats() {
   }
 }
 
-function fetchDocumentProgress() {
-  console.log('Placeholder: fetchDocumentProgress needs to be implemented for per-property document progress.');
+async function fetchDocumentProgress() {
+  const token = localStorage.getItem('token');
   const progressList = document.getElementById('progreso-documental-lista');
-  if (progressList) {
-    progressList.innerHTML = '<p class="text-sm text-gray-500 p-2">El progreso documental detallado por predio se implementará próximamente.</p>';
+  if (!progressList) return;
+
+  if (!token) {
+    progressList.innerHTML = '<p class="text-sm text-gray-500 p-2">Se requiere autenticación para ver el progreso documental.</p>';
+    return;
+  }
+
+  progressList.innerHTML = '<p class="text-gray-500 text-sm">Cargando progreso...</p>';
+
+  try {
+    const propertiesRes = await fetch('/api/predios', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!propertiesRes.ok) {
+      throw new Error(`Error HTTP ${propertiesRes.status} al obtener predios`);
+    }
+
+    const properties = await propertiesRes.json();
+    if (properties.length === 0) {
+      progressList.innerHTML = '<p class="text-sm text-gray-500 p-2">No hay predios registrados.</p>';
+      return;
+    }
+
+    progressList.innerHTML = '';
+    for (const prop of properties) {
+      const docsRes = await fetch(`/api/predios/${prop._id}/documentos`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      let docs = [];
+      if (docsRes.ok) {
+        docs = await docsRes.json();
+      }
+
+      const docCount = Array.isArray(docs) ? docs.length : 0;
+      const expected = 5; // Valor por defecto usado también en estadísticas
+      const percentage = Math.min(100, Math.round((docCount / expected) * 100));
+
+      const item = document.createElement('div');
+      item.className = 'mb-4';
+      item.innerHTML = `
+        <div class="flex justify-between mb-1">
+          <span class="text-sm font-medium text-gray-700">${prop.nombre || prop.idPredio || prop._id}</span>
+          <span class="text-sm text-gray-600">${percentage}%</span>
+        </div>
+        <div class="w-full bg-gray-200 h-2 rounded">
+          <div class="bg-green-500 h-2 rounded" style="width: ${percentage}%"></div>
+        </div>`;
+      progressList.appendChild(item);
+    }
+  } catch (error) {
+    console.error('Error fetching document progress:', error);
+    progressList.innerHTML = `<p class="text-sm text-red-500 p-2">Error al cargar progreso: ${error.message}</p>`;
   }
 }
+
 
 document.addEventListener('DOMContentLoaded', () => {
   fetchDashboardStats();

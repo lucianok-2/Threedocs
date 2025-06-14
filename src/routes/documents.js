@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { db, admin, storage } = require('../firebase');
-const { getUserHistory } = require('../public/js/history');
+const { addHistoryEntry, getUserHistory } = require('../public/js/history');
 
 
 // Middleware para verificar el Firebase ID Token
