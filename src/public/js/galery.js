@@ -3,7 +3,7 @@
 
 // Variable global para almacenar el predio actual
 let currentPropertyId = null;
-
+let currentDocumentId = null;
 // Función para abrir el modal del predio
 async function openProperty(propertyId) {
     currentPropertyId = propertyId;
@@ -292,6 +292,7 @@ function closeDocumentsListModal() {
 
 // Función para ver un documento específico
 function viewDocument(doc) {
+    currentDocumentId = document._id || document.id;
     // Cerrar modal de lista
     closeDocumentsListModal();
     
@@ -436,7 +437,28 @@ async function downloadDocument(documentId) {
         alert(`Error al descargar el documento: ${error.message}`);
     }
 }
-
+// Función para compartir el documento actualmente seleccionado
+function shareCurrentDocument() {
+    if (!currentDocumentId) return;
+    const userId = prompt('Ingrese el ID del usuario para compartir:');
+    if (!userId) return;
+    fetch(`/api/documentos/${currentDocumentId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+    })
+        .then(response => {
+            if (response.ok) {
+                alert('Documento compartido');
+            } else {
+                alert('Error al compartir documento');
+            }
+        })
+        .catch(err => {
+            console.error('Error al compartir:', err);
+            alert('Error al compartir documento');
+        });
+}
 // Función para obtener icono según tipo de archivo
 function getFileIcon(mimeType) {
     if (!mimeType) return 'fa-file';
@@ -462,6 +484,7 @@ function formatFileSize(bytes) {
 
 // Función para mostrar un documento específico (función original mantenida para compatibilidad)
 async function showDocument(documentId) {
+    currentDocumentId = documentId;
     const token = localStorage.getItem('token');
     if (!token) {
         console.error('No se encontró el token.'); // Updated error message
@@ -611,11 +634,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Cargar los predios desde Firestore
     loadProperties();
-    
+    loadSharedDocuments();
     // Configurar eventos para filtros y ordenamiento
     const filterStatus = document.getElementById('filter-status');
     const sortBy = document.getElementById('sort-by');
-    
+    const shareBtn = document.getElementById('share-document');
+
     if (filterStatus) {
         filterStatus.addEventListener('change', function() {
             loadProperties();
@@ -625,6 +649,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sortBy) {
         sortBy.addEventListener('change', function() {
             loadProperties();
+        });
+    }
+    if (shareBtn) {
+        shareBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            shareCurrentDocument();
         });
     }
 });
@@ -817,4 +847,33 @@ function getPropertyStatusColor(property) {
         case 'incompleto': return 'red-500';
         default: return 'gray-500';
     }
+}
+// Cargar y mostrar documentos compartidos con el usuario
+function loadSharedDocuments() {
+    fetch('/api/documentos/shared-with-me')
+        .then(res => res.json())
+        .then(docs => {
+            const container = document.getElementById('shared-documents');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (docs.length === 0) {
+                container.innerHTML = '<p class="col-span-full text-center text-gray-500">No hay documentos compartidos.</p>';
+                return;
+            }
+
+            docs.forEach(doc => {
+                const el = document.createElement('div');
+                el.className = 'bg-white rounded-lg shadow p-4 cursor-pointer';
+                el.innerHTML = `
+                    <h3 class="font-bold text-gray-800">${doc.nombre}</h3>
+                    <p class="text-sm text-gray-500">${doc.nombre_tipo_documento || ''}</p>
+                `;
+                el.onclick = () => viewDocument(doc);
+                container.appendChild(el);
+            });
+        })
+        .catch(err => {
+            console.error('Error al cargar documentos compartidos', err);
+        });
 }

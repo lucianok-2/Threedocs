@@ -277,6 +277,65 @@ router.get('/buscar', async (req, res) => {
   }
 });
 
+// Ruta para obtener documentos compartidos con el usuario actual
+router.get('/shared-with-me', async (req, res) => {
+  try {
+    const snapshot = await db.collection('documentos')
+      .where('sharedWith', 'array-contains', req.usuario.uid)
+      .get();
+
+    const documentos = [];
+    snapshot.forEach(doc => {
+      documentos.push({ _id: doc.id, ...doc.data() });
+    });
+
+    // Ordenar por fecha de subida
+    documentos.sort((a, b) => {
+      const dateA = a.fecha_subida ? a.fecha_subida.toDate() : new Date(0);
+      const dateB = b.fecha_subida ? b.fecha_subida.toDate() : new Date(0);
+      return dateB - dateA;
+    });
+
+    res.json(documentos);
+  } catch (error) {
+    console.error('Error al obtener documentos compartidos:', error);
+    res.status(500).json({ error: 'Error al obtener documentos compartidos' });
+  }
+});
+
+// Ruta para compartir un documento con otro usuario
+router.post('/:id/share', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId requerido' });
+    }
+
+    const docRef = db.collection('documentos').doc(req.params.id);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+
+    const documentData = docSnap.data();
+
+    // Verificar que el documento pertenezca al usuario
+    if (documentData.id_user !== req.usuario.uid) {
+      return res.status(403).json({ error: 'No tienes permiso para compartir este documento' });
+    }
+
+    await docRef.update({
+      sharedWith: admin.firestore.FieldValue.arrayUnion(userId)
+    });
+
+    res.json({ message: 'Documento compartido correctamente' });
+  } catch (error) {
+    console.error('Error al compartir documento:', error);
+    res.status(500).json({ error: 'Error al compartir el documento' });
+  }
+});
+
 // Ruta para obtener un documento específico
 router.get('/:id', async (req, res) => {
   try {
