@@ -686,22 +686,58 @@ async function loadProperties() {
     const sortBy = document.getElementById('sort-by')?.value || 'name-asc';
     
     try {
-        // Obtener los predios desde la API
-        const response = await fetch('/api/predios', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        // Obtener tipos de documento y predios en paralelo
+        const [typesRes, propsRes] = await Promise.all([
+            fetch('/api/documentos/types', { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch('/api/predios', { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
 
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
+        if (!propsRes.ok) {
+            throw new Error(`Error HTTP: ${propsRes.status}`);
         }
-        const properties = await response.json();
-        
+        if (!typesRes.ok) {
+            throw new Error(`Error HTTP: ${typesRes.status} al obtener tipos de documento`);
+        }
+
+        const [properties, documentTypes] = await Promise.all([propsRes.json(), typesRes.json()]);
+        const totalTypes = Array.isArray(documentTypes) ? documentTypes.length : 0;
+
+        // Obtener documentos por predio para calcular progreso
+        const propertiesWithCounts = await Promise.all(properties.map(async property => {
+            try {
+                const docsRes = await fetch(`/api/predios/${property._id}/documentos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                let docs = [];
+                if (docsRes.ok) {
+                    docs = await docsRes.json();
+                }
+                const uniqueTypes = new Set(Array.isArray(docs) ? docs.map(d => d.tipo_documento) : []);
+                const completed = uniqueTypes.size;
+                property.completedDocs = completed;
+                property.totalDocs = totalTypes;
+                property.pendingDocs = Math.max(totalTypes - completed, 0);
+                property.missingDocs = Math.max(totalTypes - completed, 0);
+                property.hasPendingDocs = property.pendingDocs > 0 && completed > 0;
+                property.hasCompleteDocs = completed > 0;
+                property.hasMissingDocs = property.missingDocs > 0;
+            } catch (err) {
+                console.error('Error al obtener documentos del predio:', err);
+                property.completedDocs = 0;
+                property.totalDocs = totalTypes;
+                property.pendingDocs = totalTypes;
+                property.missingDocs = totalTypes;
+                property.hasPendingDocs = false;
+                property.hasCompleteDocs = false;
+                property.hasMissingDocs = totalTypes > 0;
+            }
+            return property;
+        }));
+
         // Filtrar predios según el estado seleccionado
-        let filteredProperties = properties;
+        let filteredProperties = propertiesWithCounts;
         if (filterStatus !== 'all') {
-            filteredProperties = properties.filter(property => {
+            filteredProperties = propertiesWithCounts.filter(property => {
                 // Implementar lógica de filtrado según tus necesidades
                 if (filterStatus === 'pending') {
                     return property.hasPendingDocs;

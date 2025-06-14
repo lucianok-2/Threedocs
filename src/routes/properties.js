@@ -31,7 +31,9 @@ async function verificarToken(req, res, next) {
 router.get('/stats', verificarToken, async (req, res) => {
   try {
     const userId = req.usuario.uid;
-    const AVERAGE_DOCS_PER_PROPERTY = 5; // Requirement 5
+    // Obtener la cantidad total de tipos de documento definidos
+    const docTypesSnapshot = await db.collection('document_types').get();
+    const totalDocumentTypes = docTypesSnapshot.empty ? 0 : docTypesSnapshot.size;
 
     // Requirement 3: Query predios collection for the authenticated user
     const prediosQuerySnapshot = await db.collection('predios')
@@ -55,24 +57,43 @@ router.get('/stats', verificarToken, async (req, res) => {
     const documentosQuerySnapshot = await db.collection('documentos')
       .where('id_user', '==', userId)
       .get();
-    
-    const documentosSubidos = documentosQuerySnapshot.empty ? 0 : documentosQuerySnapshot.size; // Count total documents
 
-    // Requirement 5: Calculate cumplimientoDocumental
+    const uploadedDocumentTypes = new Set();
+    documentosQuerySnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.tipoDocumento) {
+        uploadedDocumentTypes.add(data.tipoDocumento);
+      }
+    });
+    const uniqueUploadedDocumentTypesCount = uploadedDocumentTypes.size;
+
+    const documentTypesSnapshot = await db.collection('document_types').get();
+    const totalExpectedDocumentTypes = documentTypesSnapshot.size;
+
+    // Calcular el cumplimiento documental basado en tipos de documento únicos subidos por predio
     let cumplimientoDocumental = 0;
-    if (prediosRegistrados === 0) {
-        cumplimientoDocumental = 0; // Or 100 if no properties implies full compliance by default
-    } else if (documentosSubidos === 0) {
+    if (prediosRegistrados === 0 || totalDocumentTypes === 0) {
         cumplimientoDocumental = 0;
     } else {
-        const totalExpectedDocuments = prediosRegistrados * AVERAGE_DOCS_PER_PROPERTY;
-        if (totalExpectedDocuments > 0) {
-            cumplimientoDocumental = Math.min(100, Math.round((documentosSubidos / totalExpectedDocuments) * 100));
-        } else {
-            // This case (totalExpectedDocuments <= 0 while prediosRegistrados > 0) should ideally not happen with AVERAGE_DOCS_PER_PROPERTY > 0
-            cumplimientoDocumental = 0; 
-        }
+        const tiposPorPredio = {};
+        documentosQuerySnapshot.forEach(doc => {
+            const data = doc.data();
+            if (!tiposPorPredio[data.id_predio]) {
+                tiposPorPredio[data.id_predio] = new Set();
+            }
+            if (data.tipo_documento) {
+                tiposPorPredio[data.id_predio].add(data.tipo_documento);
+            }
+        });
+
+        const totalTiposSubidos = Object.values(tiposPorPredio).reduce((acc, set) => acc + set.size, 0);
+        const totalExpectedDocuments = prediosRegistrados * totalDocumentTypes;
+        cumplimientoDocumental = totalExpectedDocuments > 0
+            ? Math.min(100, Math.round((totalTiposSubidos / totalExpectedDocuments) * 100))
+            : 0;
     }
+
+    const documentosSubidos = documentosQuerySnapshot.empty ? 0 : documentosQuerySnapshot.size; // Keep for existing response structure
 
     // Requirement 6: Return JSON
     res.json({
@@ -96,7 +117,34 @@ router.get('/', verificarToken, async (req, res) => {
       .where('id_user', '==', req.usuario.uid)
       .get();
 
-    const predios = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    const predios = [];
+    const documentTypesSnapshot = await db.collection('document_types').get();
+    const totalExpectedDocumentTypes = documentTypesSnapshot.size;
+
+    for (const doc of snapshot.docs) {
+      const propertyData = { _id: doc.id, ...doc.data() };
+
+      const documentosQuerySnapshot = await db.collection('documentos')
+        .where('id_predio', '==', doc.id)
+        .where('id_user', '==', req.usuario.uid)
+        .get();
+
+      const uploadedDocumentTypes = new Set();
+      documentosQuerySnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.tipoDocumento) {
+          uploadedDocumentTypes.add(data.tipoDocumento);
+        }
+      });
+      const uniqueUploadedDocumentTypesCount = uploadedDocumentTypes.size;
+
+      propertyData.documentCompliance = {
+        uploaded: uniqueUploadedDocumentTypesCount,
+        total: totalExpectedDocumentTypes
+      };
+      predios.push(propertyData);
+    }
+
     res.json(predios);
   } catch (error) {
     console.error('Error al obtener predios:', error);
@@ -162,7 +210,7 @@ router.post('/', verificarToken, async (req, res) => {
       fechaCreacion: new Date(),
       id_user: req.usuario.uid,
       // Requirement 8: default activo to false if not provided or not a boolean
-      activo: typeof activo === 'boolean' ? activo : false 
+      activo: typeof activo === 'boolean' ? activo : true 
     };
 
     const docRef = await db.collection('predios').add(predioData);

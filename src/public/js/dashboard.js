@@ -181,12 +181,23 @@ async function fetchDocumentProgress() {
   progressList.innerHTML = '<p class="text-gray-500 text-sm">Cargando progreso...</p>';
 
   try {
-    const propertiesRes = await fetch('/api/predios', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const [typesRes, propertiesRes] = await Promise.all([
+      fetch('/api/documentos/types', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch('/api/predios', { headers: { 'Authorization': `Bearer ${token}` } })
+    ]);
+
+    if (!typesRes.ok) {
+      throw new Error(`Error HTTP ${typesRes.status} al obtener tipos de documento`);
+    }
+
+    
+
+    
+    const documentTypes = await typesRes.json();
     if (!propertiesRes.ok) {
       throw new Error(`Error HTTP ${propertiesRes.status} al obtener predios`);
     }
+    
 
     const properties = await propertiesRes.json();
     if (properties.length === 0) {
@@ -195,6 +206,8 @@ async function fetchDocumentProgress() {
     }
 
     progressList.innerHTML = '';
+    const totalTypes = Array.isArray(documentTypes) ? documentTypes.length : 0;
+
     for (const prop of properties) {
       const docsRes = await fetch(`/api/predios/${prop._id}/documentos`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -205,16 +218,16 @@ async function fetchDocumentProgress() {
         docs = await docsRes.json();
       }
 
-      const docCount = Array.isArray(docs) ? docs.length : 0;
-      const expected = 5; // Valor por defecto usado también en estadísticas
-      const percentage = Math.min(100, Math.round((docCount / expected) * 100));
-
+      const tiposUnicos = new Set(Array.isArray(docs) ? docs.map(d => d.tipo_documento) : []);
+      const expected = totalTypes;
+      const percentage = expected > 0 ? Math.min(100, Math.round((tiposUnicos.size / expected) * 100)) : 0;
+      
       const item = document.createElement('div');
       item.className = 'mb-4';
       item.innerHTML = `
         <div class="flex justify-between mb-1">
           <span class="text-sm font-medium text-gray-700">${prop.nombre || prop.idPredio || prop._id}</span>
-          <span class="text-sm text-gray-600">${percentage}%</span>
+          <span class="text-sm text-gray-600">${tiposUnicos.size}/${expected} (${percentage}%)</span>
         </div>
         <div class="w-full bg-gray-200 h-2 rounded">
           <div class="bg-green-500 h-2 rounded" style="width: ${percentage}%"></div>
@@ -252,4 +265,4 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = '/upload'; // Or your designated upload page route
     });
   }
-}); 
+});
