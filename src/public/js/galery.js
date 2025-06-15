@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Cargar los predios desde Firestore
     loadProperties();
-    loadSharedDocuments();
+    
     // Configurar eventos para filtros y ordenamiento
     const filterStatus = document.getElementById('filter-status');
     const sortBy = document.getElementById('sort-by');
@@ -842,7 +842,6 @@ function renderProperties(properties) {
                     </div>
                     <div class="flex space-x-1">
                         ${completedDocs > 0 ? `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">${completedDocs} Completos</span>` : ''}
-                        ${pendingDocs > 0 ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">${pendingDocs} Pendientes</span>` : ''}
                         ${missingDocs > 0 ? `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">${missingDocs} Faltantes</span>` : ''}
                     </div>
                 </div>
@@ -883,33 +882,4 @@ function getPropertyStatusColor(property) {
         case 'incompleto': return 'red-500';
         default: return 'gray-500';
     }
-}
-// Cargar y mostrar documentos compartidos con el usuario
-function loadSharedDocuments() {
-    fetch('/api/documentos/shared-with-me')
-        .then(res => res.json())
-        .then(docs => {
-            const container = document.getElementById('shared-documents');
-            if (!container) return;
-            container.innerHTML = '';
-
-            if (docs.length === 0) {
-                container.innerHTML = '<p class="col-span-full text-center text-gray-500">No hay documentos compartidos.</p>';
-                return;
-            }
-
-            docs.forEach(doc => {
-                const el = document.createElement('div');
-                el.className = 'bg-white rounded-lg shadow p-4 cursor-pointer';
-                el.innerHTML = `
-                    <h3 class="font-bold text-gray-800">${doc.nombre}</h3>
-                    <p class="text-sm text-gray-500">${doc.nombre_tipo_documento || ''}</p>
-                `;
-                el.onclick = () => viewDocument(doc);
-                container.appendChild(el);
-            });
-        })
-        .catch(err => {
-            console.error('Error al cargar documentos compartidos', err);
-        });
 }
