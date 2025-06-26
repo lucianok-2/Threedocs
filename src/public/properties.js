@@ -81,7 +81,6 @@ function loadPropertyDetails(propertyId) {
   
   // Mostrar secciones de detalles
   document.getElementById('property-details').classList.remove('hidden');
-  document.getElementById('property-documents').classList.remove('hidden');
   
   // Mostrar mensaje de carga
   document.getElementById('property-info').innerHTML = '<p class="text-gray-500 text-center py-4">Cargando detalles del predio...</p>';
@@ -100,7 +99,7 @@ function loadPropertyDetails(propertyId) {
   .then(property => {
     // Rellenar información del predio
     const propertyInfo = document.getElementById('property-info');
-    propertyInfo.innerHTML = `
+    let htmlContent = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <p class="text-sm text-gray-500">ID del Predio</p>
@@ -122,8 +121,39 @@ function loadPropertyDetails(propertyId) {
           <p class="text-sm text-gray-500">RUT Propietario</p>
           <p class="font-medium">${property.rutPropietario || 'No especificado'}</p>
         </div>
-      </div>
     `;
+
+    if (property.modeloCompra === 'Intermediario' && property.intermediario) {
+      htmlContent += `
+        <div>
+          <p class="text-sm text-gray-500">RUT Intermediario</p>
+          <p class="font-medium">${property.intermediario.rut || 'No especificado'}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">Nombre Intermediario</p>
+          <p class="font-medium">${property.intermediario.nombre || 'No especificado'}</p>
+        </div>
+      `;
+    }
+
+    if (property.certificaciones && property.certificaciones.length > 0) {
+      const certificationCodes = property.certificaciones
+        .filter(cert => cert.codigo && cert.tipo !== 'NINGUNA')
+        .map(cert => `${cert.tipo}: ${cert.codigo}`)
+        .join(', ');
+
+      if (certificationCodes) {
+        htmlContent += `
+          <div class="md:col-span-2">
+            <p class="text-sm text-gray-500">Códigos de Certificación</p>
+            <p class="font-medium">${certificationCodes}</p>
+          </div>
+        `;
+      }
+    }
+
+    htmlContent += `</div>`;
+    propertyInfo.innerHTML = htmlContent;
     
     // Actualizar los botones con el ID del predio
     const editBtn = document.getElementById('edit-property-btn');
@@ -138,7 +168,7 @@ function loadPropertyDetails(propertyId) {
     
     // Cargar documentos del predio
     try {
-      loadPropertyDocuments(propertyId);
+      // loadPropertyDocuments(propertyId); // Call removed as per request
     } catch (error) {
       console.error('Error al cargar documentos:', error);
       const documentList = document.getElementById('document-list');
@@ -395,13 +425,55 @@ function editProperty(propertyId) {
       // Estado activo del predio
       const activeChk = document.getElementById('edit-property-active');
       if (activeChk) activeChk.checked = property.is_active !== false;
-      // Si tiene intermediario, llenar esos campos también
+      
+      // Llenar o limpiar campos de intermediario
+      const intermediaryNameInput = document.getElementById('edit-intermediary-name');
+      const intermediaryRutInput = document.getElementById('edit-intermediary-rut');
+
       if (property.modeloCompra === 'Intermediario' && property.intermediario) {
-        document.getElementById('edit-intermediary-name').value = property.intermediario.nombre || '';
-        document.getElementById('edit-intermediary-rut').value = property.intermediario.rut || '';
+        intermediaryNameInput.value = property.intermediario.nombre || '';
+        intermediaryRutInput.value = property.intermediario.rut || '';
+      } else {
+        intermediaryNameInput.value = '';
+        intermediaryRutInput.value = '';
       }
       
-      // Actualizar la visibilidad de la sección de intermediario
+      // Configurar certificaciones
+      const certFscCheckbox = document.getElementById('edit-cert-fsc');
+      const certFscCodeInput = document.getElementById('edit-cert-fsc-code');
+      const certPefcCheckbox = document.getElementById('edit-cert-pefc');
+      const certPefcCodeInput = document.getElementById('edit-cert-pefc-code');
+      const certNoneCheckbox = document.getElementById('edit-cert-none');
+
+      // Resetear campos de certificación
+      certFscCheckbox.checked = false;
+      certFscCodeInput.value = '';
+      certFscCodeInput.classList.add('hidden');
+      certPefcCheckbox.checked = false;
+      certPefcCodeInput.value = '';
+      certPefcCodeInput.classList.add('hidden');
+      certNoneCheckbox.checked = false;
+
+      if (property.certificaciones && property.certificaciones.length > 0) {
+        property.certificaciones.forEach(cert => {
+          if (cert.tipo === 'FSC') {
+            certFscCheckbox.checked = true;
+            certFscCodeInput.value = cert.codigo || '';
+            if (cert.codigo) certFscCodeInput.classList.remove('hidden');
+          } else if (cert.tipo === 'PEFC') {
+            certPefcCheckbox.checked = true;
+            certPefcCodeInput.value = cert.codigo || '';
+            if (cert.codigo) certPefcCodeInput.classList.remove('hidden');
+          } else if (cert.tipo === 'NINGUNA') {
+            certNoneCheckbox.checked = true;
+          }
+        });
+      } else {
+        // Si no hay certificaciones, marcar "NINGUNA" por defecto (opcional, según requisitos)
+        // certNoneCheckbox.checked = true; 
+      }
+      
+      // Actualizar la visibilidad de la sección de intermediario DESPUÉS de setear el modelo de compra
       toggleIntermediarySection('edit');
       
       // Guardar el ID del predio en el formulario
@@ -456,104 +528,6 @@ function deleteProperty(propertyId) {
   .catch(error => {
     console.error('Error:', error);
     alert('Error al eliminar el predio');
-  });
-}
-
-// Función para cargar los documentos de un predio
-function loadPropertyDocuments(propertyId) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-    window.location.href = '/';
-    return;
-  }
-  
-  const documentList = document.getElementById('document-list');
-  if (documentList) {
-    documentList.innerHTML = '<p class="text-gray-500 text-center py-4">Cargando documentos...</p>';
-    
-    // Realizar la petición para obtener los documentos del predio
-    fetch(`/api/predios/${propertyId}/documentos`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Error al cargar los documentos');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.length === 0) {
-        documentList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay documentos disponibles</p>';
-      } else {
-        documentList.innerHTML = '';
-        data.forEach(document => {
-          const documentItem = document.createElement('div');
-          documentItem.className = 'mb-4 p-4 border rounded-lg';
-          documentItem.innerHTML = `
-            <div class="flex justify-between items-center">
-              <div>
-                <div class="font-medium">${document.nombre || 'Nombre no disponible'}</div>
-                <div class="text-sm text-gray-600">${document.fecha_subida ? new Date(document.fecha_subida).toLocaleDateString() : 'Fecha no disponible'}</div>
-              </div>
-              <div>
-                <a href="${document.url_archivo || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 mr-2 ${!document.url_archivo ? 'hidden' : ''}">Ver</a>
-                <button class="text-red-600 hover:text-red-800 delete-document" data-id="${document._id}">Eliminar</button>
-              </div>
-            </div>
-          `;
-          documentList.appendChild(documentItem);
-        });
-        
-        // Agregar event listeners a los botones de eliminar
-        const deleteButtons = documentList.querySelectorAll('.delete-document');
-        deleteButtons.forEach(button => {
-          button.addEventListener('click', function() {
-            const documentId = this.getAttribute('data-id');
-            if (confirm('¿Está seguro de que desea eliminar este documento?')) {
-              deleteDocument(propertyId, documentId);
-            }
-          });
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      documentList.innerHTML = '<p class="text-red-500 text-center py-4">Error al cargar los documentos</p>';
-    });
-  }
-}
-
-// Función para eliminar un documento
-function deleteDocument(propertyId, documentId) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('No se encontró un token de autenticación. Por favor, inicie sesión nuevamente.');
-    window.location.href = '/';
-    return;
-  }
-  
-  fetch(`/api/predios/${propertyId}/documentos/${documentId}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error('Error al eliminar el documento');
-    }
-    return response.json();
-  })
-  .then(data => {
-    alert('Documento eliminado correctamente');
-    loadPropertyDocuments(propertyId);
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('Error al eliminar el documento');
   });
 }
 
@@ -634,6 +608,9 @@ function updateProperty(form) {
       nombre: nombreIntermediario,
       rut: rutIntermediario
     };
+  } else {
+    // Asegurarse de que no se envíen datos de intermediario si el modelo no es Intermediario
+    delete propertyData.intermediario; 
   }
   
   console.log('Datos actualizados del predio:', propertyData);

@@ -437,28 +437,7 @@ async function downloadDocument(documentId) {
         alert(`Error al descargar el documento: ${error.message}`);
     }
 }
-// Función para compartir el documento actualmente seleccionado
-function shareCurrentDocument() {
-    if (!currentDocumentId) return;
-    const userId = prompt('Ingrese el ID del usuario para compartir:');
-    if (!userId) return;
-    fetch(`/api/documentos/${currentDocumentId}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-    })
-        .then(response => {
-            if (response.ok) {
-                alert('Documento compartido');
-            } else {
-                alert('Error al compartir documento');
-            }
-        })
-        .catch(err => {
-            console.error('Error al compartir:', err);
-            alert('Error al compartir documento');
-        });
-}
+
 // Función para obtener icono según tipo de archivo
 function getFileIcon(mimeType) {
     if (!mimeType) return 'fa-file';

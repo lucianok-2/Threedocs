@@ -1,13 +1,13 @@
 <div id="login-screen" class="gradient-bg min-h-screen flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-md transition-all duration-300 transform hover:scale-[1.01]">
-    <div class="bg-gradient-to-r from-blue-800 to-blue-600 py-8 px-8 text-center relative">
+    <div class="bg-gradient-to-r from-green-800 to-green-600 py-8 px-8 text-center relative">
       <div class="absolute -top-10 left-1/2 transform -translate-x-1/2">
         <div class="bg-white p-3 rounded-full shadow-lg floating">
-          <i class="fas fa-file-alt text-blue-600 text-3xl"></i>
+          <i class="fas fa-file-alt text-green-600 text-3xl"></i>
         </div>
       </div>
       <h1 class="text-2xl font-bold text-white mt-4">Sistema de Gestión Documental</h1>
-      <p class="text-blue-100 mt-2">Ingrese sus credenciales para continuar</p>
+      <p class="text-green-100 mt-2">Ingrese sus credenciales para continuar</p>
     </div>
     
     <div class="p-8 pt-12">
@@ -30,21 +30,18 @@
           </div>
           <input type="password" id="password" class="w-full pl-10 pr-4 py-3 border rounded-lg input-focus-effect transition-all duration-200" placeholder="Ingrese su contraseña">
           <button id="toggle-password" class="absolute inset-y-0 right-0 pr-3 flex items-center">
-            <i class="fas fa-eye text-gray-400 hover:text-blue-600 cursor-pointer"></i>
+            <i class="fas fa-eye text-gray-400 hover:text-green-600 cursor-pointer"></i>
           </button>
         </div>
         <p id="password-error" class="text-red-500 text-sm mt-1 hidden"><i class="fas fa-exclamation-circle mr-1"></i> La contraseña es requerida</p>
       </div>
       
       <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center">
-          <input type="checkbox" id="remember" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-          <label for="remember" class="ml-2 block text-sm text-gray-700">Recordar sesión</label>
-        </div>
+        
         <a href="/api/auth/forgot-password" class="text-sm text-blue-600 hover:underline">¿Olvidó su contraseña?</a>
       </div>
       
-      <button id="login-btn" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center">
+      <button id="login-btn" class="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center">
         <i class="fas fa-sign-in-alt mr-2"></i> Iniciar Sesión
       </button>
       
@@ -58,7 +55,7 @@
       </div>
       
       <div class="mt-4 text-center">
-        <a href="/register" class="inline-block px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors duration-200">
+        <a href="/register" class="inline-block px-4 py-2 border border-green-600 text-green-600 rounded-lg hover:bg-blue-50 transition-colors duration-200">
           Registrar nuevo usuario
         </a>
       </div>
@@ -72,7 +69,7 @@
 
 <style>
   .gradient-bg {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+    background: linear-gradient(135deg, #457954be 0%, #2a9955 50%, #20856f 100%);
   }
   .input-focus-effect:focus {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);

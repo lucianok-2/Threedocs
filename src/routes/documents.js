@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { isValidChileanRUT } = require('../utils/validation');
+
 const { db, admin, storage } = require('../firebase');
 const { addHistoryEntry, getUserHistory } = require('../public/js/history');
 
@@ -136,15 +136,7 @@ router.post('/upload', upload.single('documentFile'), async (req, res) => {
     
     const predioData = predioDoc.data();
     
-    // START RUT VALIDATION
-    if (predioData.rutPropietario && !isValidChileanRUT(predioData.rutPropietario)) {
-      // Eliminar el archivo temporal si existe
-      if (req.file && req.file.path && fs.existsSync(req.file.path)) { // Check path validity before unlinking
-        fs.unlinkSync(req.file.path);
-      }
-      return res.status(400).json({ error: 'El RUT asociado al predio no es válido. No se puede subir el documento.' });
-    }
-    // END RUT VALIDATION
+    
     
     // Verificar que el predio pertenezca al usuario actual
     if (predioData.id_user !== req.usuario.uid) {
