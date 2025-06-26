@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const { db, admin } = require('../firebase'); // Assuming firebase.js exports db and admin
 const { addHistoryEntry } = require('../public/js/history');// Assuming this is correctly imported
 
@@ -117,33 +118,37 @@ router.get('/', verificarToken, async (req, res) => {
       .where('id_user', '==', req.usuario.uid)
       .get();
 
-    const predios = [];
-    const documentTypesSnapshot = await db.collection('document_types').get();
-    const totalExpectedDocumentTypes = documentTypesSnapshot.size;
+      const documentTypesSnapshot = await db.collection('document_types').get();
+      const totalExpectedDocumentTypes = documentTypesSnapshot.size;
+  
+      const predios = await Promise.all(
+        snapshot.docs.map(async doc => {
+          const propertyData = { _id: doc.id, ...doc.data() };
+  
+          const documentosQuerySnapshot = await db
+            .collection('documentos')
+            .where('id_predio', '==', doc.id)
+            .where('id_user', '==', req.usuario.uid)
+            .get();
+  
+          const uploadedDocumentTypes = new Set();
+          documentosQuerySnapshot.forEach(d => {
+            const data = d.data();
+            if (data.tipoDocumento) {
+              uploadedDocumentTypes.add(data.tipoDocumento);
+            }
+          });
+  
+          propertyData.documentCompliance = {
+            uploaded: uploadedDocumentTypes.size,
+            total: totalExpectedDocumentTypes
+          };
+  
+          return propertyData;
+        })
+      );
 
-    for (const doc of snapshot.docs) {
-      const propertyData = { _id: doc.id, ...doc.data() };
-
-      const documentosQuerySnapshot = await db.collection('documentos')
-        .where('id_predio', '==', doc.id)
-        .where('id_user', '==', req.usuario.uid)
-        .get();
-
-      const uploadedDocumentTypes = new Set();
-      documentosQuerySnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.tipoDocumento) {
-          uploadedDocumentTypes.add(data.tipoDocumento);
-        }
-      });
-      const uniqueUploadedDocumentTypesCount = uploadedDocumentTypes.size;
-
-      propertyData.documentCompliance = {
-        uploaded: uniqueUploadedDocumentTypesCount,
-        total: totalExpectedDocumentTypes
-      };
-      predios.push(propertyData);
-    }
+      res.json(predios);  
 
     res.json(predios);
   } catch (error) {
@@ -189,6 +194,8 @@ router.post('/', verificarToken, async (req, res) => {
       propietario,
       activo // Requirement 8: consume activo field
     } = req.body;
+
+
 
     if (!idPredio || !nombre) {
       return res.status(400).json({ error: 'idPredio y nombre son obligatorios' });
@@ -251,7 +258,12 @@ router.put('/:id', verificarToken, async (req, res) => {
     ];
     
     let changed = false;
+    // Create a variable to hold potential error response
+    let errorResponse = null; 
+
     allowedFields.forEach(field => {
+      if (errorResponse) return; // Stop processing if an error has already been set
+
       if (req.body[field] !== undefined) {
         if (field === 'activo') {
           // Requirement 9: ensure 'activo' is a boolean before updating
@@ -260,10 +272,17 @@ router.put('/:id', verificarToken, async (req, res) => {
               updates[field] = req.body[field];
               changed = true;
             }
-          } 
-          // If req.body.activo is present but not a boolean, it's ignored, 
-          // and currentData.activo (the existing value) is preserved.
+          }
+          // If req.body.activo is present but not a boolean, it's ignored.
+        } else if (field === 'rutPropietario') {
+            
+          // Only update if it's different and valid (or empty/null)
+          if (currentData[field] !== req.body[field]) {
+            updates[field] = req.body[field]; // This will take valid RUT or null/empty string
+            changed = true;
+          }
         } else {
+          // For other fields
           if (currentData[field] !== req.body[field]) {
             updates[field] = req.body[field];
             changed = true;
@@ -271,6 +290,11 @@ router.put('/:id', verificarToken, async (req, res) => {
         }
       }
     });
+
+    // If an error was set during validation, return it immediately
+    if (errorResponse) {
+      return res.status(errorResponse.status).json(errorResponse.body);
+    }
 
     if (changed) {
         await docRef.update(updates);

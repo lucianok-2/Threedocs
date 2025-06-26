@@ -107,8 +107,7 @@ const documentModel = {
 };
 
 module.exports = {
-  documentModel,
-  DOCUMENT_TYPES, // Puede que necesites actualizar esto también
-  documentTypes,
+  documentModel
+  
   
 };

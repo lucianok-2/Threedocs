@@ -574,6 +574,7 @@ Asegúrate de que la respuesta sea únicamente el objeto JSON.`;
   if (uploadForm) {
     uploadForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      let alertTriggeredByResponseNotOk = false; // Flag to manage alerts
       const formData = new FormData();
 
       // Validate required fields (now using specific element vars)
@@ -711,10 +712,24 @@ Asegúrate de que la respuesta sea únicamente el objeto JSON.`;
               body: formData
             });
 
-            if (!response.ok) throw new Error('Error al subir el documento');
+            if (!response.ok) {
+              let errorMessage = 'Error al subir el documento.'; // Default message
+              try {
+                const errorData = await response.json(); // Try to parse JSON error from server
+                if (errorData && errorData.error) {
+                  errorMessage = errorData.error; // Use server's error message
+                }
+              } catch (e) {
+                // Parsing JSON failed, use default message or response.statusText
+                errorMessage = `Error del servidor: ${response.statusText || 'Error desconocido'}`;
+              }
+              alert(errorMessage); // Display the specific error message
+              alertTriggeredByResponseNotOk = true; // Set flag
+              return; // Stop further execution in the submit handler
+            }
 
-            const data = await response.json();
-            alert('Documento subido correctamente');
+            const data = await response.json(); // This should only be called if response.ok
+            // alert('Documento subido correctamente'); // Original success alert
             if (uploadModal) uploadModal.classList.add('hidden');
             if (processAiBtn) {
               processAiBtn.classList.add('hidden');
@@ -733,7 +748,12 @@ Asegúrate de que la respuesta sea únicamente el objeto JSON.`;
         );
       } catch (error) {
         console.error('Error during document submission process:', error);
-        alert('Error al subir el documento: ' + error.message);
+        // If the error is from the !response.ok block, an alert was already shown.
+        // This catch will handle other errors e.g. network issues before fetch, or issues in success logic
+        // So, it's generally fine to alert here as it implies a different kind of error.
+        if (!alertTriggeredByResponseNotOk) {
+            alert('No se pudo completar la subida del documento: ' + error.message);
+        }
       } finally {
         if (submitUploadBtn) {
           submitUploadBtn.disabled = false;
@@ -770,9 +790,13 @@ async function classifyDocumentText(textToClassify) {
 
         if (response.ok) {
             console.log("✅ Document Classification Result:");
-            console.log("✅ Document Classification Result:");
             console.log("   Predicted Type:", result.prediction);
             console.log("   Confidence:", result.confidence !== undefined ? result.confidence.toFixed(4) : 'N/A');
+
+            if (result.confidence !== undefined && result.confidence < 0.80) {
+              alert("La confianza de la clasificación del documento es inferior al 80%. No se recomienda continuar con este documento si la confianza es baja.");
+              
+            }
 
             // New logic to auto-select the dropdown:
             const predictedTypeName = result.prediction; // e.g., "PLANO DEL PREDIO"

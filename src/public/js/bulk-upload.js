@@ -13,19 +13,7 @@ const bulkUploadFeedback = document.getElementById('bulk-upload-feedback');
 const cancelBulkUpload = document.getElementById('cancel-bulk-upload');
 const closeBulkUploadModal = document.getElementById('close-bulk-upload-modal');
 
-// Mostrar/ocultar botón de carga masiva según selección de predio
-propertySelect.addEventListener('change', function() {
-  if (this.value) {
-    bulkUploadButton.classList.remove('hidden');
-  } else {
-    bulkUploadButton.classList.add('hidden');
-  }
-});
 
-// Abrir modal de carga masiva
-bulkUploadButton.addEventListener('click', () => {
-  window.modalHelpers.showBulkUploadModal();
-});
 
 // Cerrar modal
 [closeBulkUploadModal, cancelBulkUpload].forEach(element => {

@@ -5,7 +5,6 @@ const path = require('path');
 const { admin, db , storage} = require('./firebase');
 const cookieParser = require('cookie-parser'); 
 const multer = require('multer');
-
 const cors = require('cors');
 require('dotenv').config();
 const app = express();
@@ -108,7 +107,16 @@ app.get('/', (req, res) => res.render('login', { layout: 'auth' }));
 app.get('/register', (req, res) => res.render('register', { layout: 'auth' }));
 
 // Rutas protegidas con layout principal (incluye sidebar)
-app.get('/dashboard', verificarToken, (req, res) => res.render('dashboard', { usuario: req.usuario }));
+app.get('/dashboard', verificarToken, async (req, res) => {
+    try {
+        const userDoc = await db.collection('usuarios').doc(req.usuario.uid).get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        res.render('dashboard', { usuario: req.usuario, nombreUsuario: userData.nombre || req.usuario.email });
+    } catch (error) {
+        console.error('Error al obtener datos del usuario para el dashboard:', error);
+        res.render('dashboard', { usuario: req.usuario, nombreUsuario: req.usuario.email }); // Fallback to email
+    }
+});
 app.get('/upload', verificarToken, (req, res) => {
     // Pasar el ID del predio a la vista si está presente en la URL
     const propertyId = req.query.propertyId || null;
